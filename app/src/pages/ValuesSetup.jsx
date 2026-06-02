@@ -1,6 +1,5 @@
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { saveUserValues, getUserValues } from '../engine/storage';
 import { DEFAULT_VALUES } from '../engine/decisionEngine';
 
@@ -63,10 +62,7 @@ export default function ValuesSetup({ onNavigate }) {
                 </div>
 
                 {showSaved && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
+                    <div
                         style={{
                             marginTop: 'var(--space-5)',
                             padding: 'var(--space-4)',
@@ -74,11 +70,12 @@ export default function ValuesSetup({ onNavigate }) {
                             textAlign: 'center',
                             fontFamily: 'var(--font-display)',
                             fontStyle: 'italic',
-                            color: 'var(--accent-vermilion)'
+                            color: 'var(--accent-vermilion)',
+                            animation: 'fadeInUp 0.4s var(--ease-editorial)'
                         }}
                     >
                         Values saved! Future decisions will be weighed against these priorities.
-                    </motion.div>
+                    </div>
                 )}
 
                 <div className="question-actions" style={{ marginTop: 'var(--space-7)' }}>

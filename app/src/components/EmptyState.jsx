@@ -4,17 +4,13 @@
  * Uses Fraunces italic for the reflective message + optional accent action
  */
 
-import { motion } from 'framer-motion';
-
 export default function EmptyState({ message, actionLabel, onAction }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+    <div
       style={{
         textAlign: 'center',
         padding: 'var(--space-8) var(--space-6)',
+        animation: 'fadeInUp 0.5s var(--ease-editorial)'
       }}
     >
       <p
@@ -34,6 +30,6 @@ export default function EmptyState({ message, actionLabel, onAction }) {
           {actionLabel}
         </button>
       )}
-    </motion.div>
+    </div>
   );
 }

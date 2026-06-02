@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { getDecision } from '../engine/storage';
+import EmptyState from '../components/EmptyState';
+import LoadingState from '../components/LoadingState';
 const AnalysisView = lazy(() => import('./AnalysisView'));
 
 export default function DecisionDetail({ decisionId, onNavigate }) {
@@ -7,37 +9,23 @@ export default function DecisionDetail({ decisionId, onNavigate }) {
 
     if (!decision) {
         return (
-            <div className="empty-state">
-                <h3>Decision Not Found</h3>
-                <button className="btn btn-primary" onClick={() => onNavigate('dashboard')}>
-                    Back to Dashboard
-                </button>
-            </div>
+            <EmptyState
+                message="Decision not found."
+                actionLabel="Back to Dashboard"
+                onAction={() => onNavigate('dashboard')}
+            />
         );
     }
 
+    // Just pass through to AnalysisView - it handles its own header/masthead
     return (
-        <div>
-            <div className="glass-card" style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(99, 102, 241, 0.05)' }}>
-                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '2rem', marginBottom: '0.5rem' }}>
-                    {decision.title}
-                </h2>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                    Analyzed on {new Date(decision.createdAt).toLocaleDateString()}
-                </div>
-                <p style={{ color: 'var(--text-primary)', lineHeight: '1.6' }}>
-                    {decision.description}
-                </p>
-            </div>
-
-            <Suspense fallback={<div className="loading" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Loading analysis…</div>}>
-                <AnalysisView
-                    analysis={decision.analysis}
-                    title={decision.title}
-                    description={decision.description}
-                    onNavigate={onNavigate}
-                />
-            </Suspense>
-        </div>
+        <Suspense fallback={<LoadingState stages={['Loading analysis...']} />}>
+            <AnalysisView
+                analysis={decision.analysis}
+                title={decision.title}
+                description={decision.description}
+                onNavigate={onNavigate}
+            />
+        </Suspense>
     );
 }

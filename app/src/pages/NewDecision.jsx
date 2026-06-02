@@ -179,6 +179,7 @@ export default function NewDecision({ onNavigate }) {
     const [isThinking, setIsThinking] = useState(false);
 
     // Analysis progress
+    // eslint-disable-next-line no-unused-vars
     const [analyzeProgress, setAnalyzeProgress] = useState(0);
     const [analyzeStage, setAnalyzeStage] = useState('');
     const [error, setError] = useState(null);

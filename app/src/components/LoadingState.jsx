@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 
 const DEFAULT_STAGES = [
   'Reading your emotional landscape...',
@@ -60,13 +60,10 @@ export default function LoadingState({ stages = DEFAULT_STAGES, currentStage = n
       }}
     >
       <AnimatePresence mode="wait">
-        <motion.p
+        <div
           key={displayText}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           style={{
+            animation: 'fadeInUp 0.4s var(--ease-editorial)',
             fontFamily: 'var(--font-display)',
             fontStyle: 'italic',
             fontSize: '1.125rem',
@@ -88,7 +85,7 @@ export default function LoadingState({ stages = DEFAULT_STAGES, currentStage = n
               transition: 'opacity 0.1s',
             }}
           />
-        </motion.p>
+        </div>
       </AnimatePresence>
     </div>
   );

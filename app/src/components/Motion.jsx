@@ -7,76 +7,55 @@
  * - Intentional hover states (not translateY bounce)
  */
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 
-// Editorial cascade: items animate in like paragraphs setting on a page
-const editorialEase = [0.16, 1, 0.3, 1];
+// Removed unused editorialEase constant - using CSS animations instead
 
 export const PageTransition = ({ children, pageKey }) => (
   <AnimatePresence mode="wait">
-    <motion.div
+    <div
       key={pageKey}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.5, ease: editorialEase }}
+      style={{ animation: 'fadeIn 0.5s var(--ease-editorial)' }}
     >
       {children}
-    </motion.div>
+    </div>
   </AnimatePresence>
 );
 
 export const CascadeItem = ({ children, delay = 0, ...props }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 8 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{
-      duration: 0.5,
-      delay,
-      ease: editorialEase
+  <div
+    style={{
+      animation: `fadeInUp 0.5s var(--ease-editorial) ${delay}s backwards`
     }}
     {...props}
   >
     {children}
-  </motion.div>
+  </div>
 );
 
-export const CascadeList = ({ children, staggerDelay = 0.04 }) => (
-  <motion.div
-    initial="hidden"
-    animate="visible"
-    variants={{
-      visible: {
-        transition: {
-          staggerChildren: staggerDelay
-        }
-      }
-    }}
-  >
+export const CascadeList = ({ children }) => (
+  <div style={{ animation: 'fadeIn 0.5s var(--ease-editorial)' }}>
     {children}
-  </motion.div>
+  </div>
 );
 
 export const CascadeListItem = ({ children, ...props }) => (
-  <motion.div
-    variants={{
-      hidden: { opacity: 0, y: 8 },
-      visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: editorialEase } }
-    }}
+  <div
+    style={{ animation: 'fadeInUp 0.5s var(--ease-editorial)' }}
     {...props}
   >
     {children}
-  </motion.div>
+  </div>
 );
 
 // Vermilion underline that draws left-to-right
 export const VermilionUnderline = ({ children, ...props }) => (
-  <motion.span
+  <span
     style={{ position: 'relative', display: 'inline-block' }}
     {...props}
   >
     {children}
-    <motion.span
+    <span
       style={{
         position: 'absolute',
         bottom: '-4px',
@@ -84,27 +63,20 @@ export const VermilionUnderline = ({ children, ...props }) => (
         right: 0,
         height: '2px',
         background: 'var(--accent-vermilion)',
+        animation: 'scaleXIn 0.6s var(--ease-editorial) 0.2s backwards',
         transformOrigin: 'left'
       }}
-      initial={{ scaleX: 0 }}
-      animate={{ scaleX: 1 }}
-      transition={{ duration: 0.6, delay: 0.2, ease: editorialEase }}
     />
-  </motion.span>
+  </span>
 );
 
 // Modal/dialog fade + scale (card sliding onto paper)
 export const ModalTransition = ({ children, isOpen }) => (
   <AnimatePresence>
     {isOpen && (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.3, ease: editorialEase }}
-      >
+      <div style={{ animation: 'fadeIn 0.3s var(--ease-editorial)' }}>
         {children}
-      </motion.div>
+      </div>
     )}
   </AnimatePresence>
 );
