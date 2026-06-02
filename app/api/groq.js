@@ -3,6 +3,7 @@ const RATE_LIMIT_MAX_REQUESTS = 30;
 const MAX_MESSAGES = 24;
 const MAX_MESSAGE_CHARS = 4000;
 const MAX_PROMPT_CHARS = 24000;
+const STREAM_ENABLED = true;
 
 const requestBuckets = new Map();
 
@@ -101,6 +102,8 @@ export default async function handler(req, res) {
     return json(res, 400, { error: validationError });
   }
 
+  const wantsStream = payload?.stream === true;
+
   try {
     const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -108,8 +111,40 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${serverKey}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, stream: wantsStream && STREAM_ENABLED })
     });
+
+    if (wantsStream && STREAM_ENABLED) {
+      if (!upstream.ok) {
+        const errorText = await upstream.text();
+        return json(res, upstream.status, { error: errorText || `Groq request failed (${upstream.status}).` });
+      }
+
+      res.status(200);
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const reader = upstream.body?.getReader();
+      if (!reader) {
+        return json(res, 502, { error: 'Streaming body unavailable.' });
+      }
+
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(decoder.decode(value));
+        }
+        res.end();
+        return;
+      } catch (err) {
+        console.error('Stream error:', err);
+        res.end();
+        return;
+      }
+    }
 
     const responseText = await upstream.text();
     const retryHeader = upstream.headers.get('retry-after');

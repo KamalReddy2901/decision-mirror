@@ -5,11 +5,15 @@ import {
     isAIAvailable,
     generateNextQuestion,
     generateAnalysis,
+    generateAnalysisStream,
+    getAIAccessMode,
     getRateLimitCooldownRemainingMs
 } from '../engine/aiService';
-import { saveDecision, getUserValues } from '../engine/storage';
+import { saveDecision, getUserValues, getRelevantHistory } from '../engine/storage';
 import { runFullAnalysis } from '../engine/decisionEngine';
 import LoadingState from '../components/LoadingState';
+import TemplateSelector from '../components/TemplateSelector';
+import { getTemplateContextPrompt } from '../engine/templates';
 
 const MAX_QUESTIONS = 5;
 
@@ -44,7 +48,7 @@ function buildLocalFallbackAIAnalysis({ description, options, localEngine, emoti
     return {
         verdict: {
             title: topCondition?.recommendation || 'Use a deliberate pause before deciding',
-            recommendation: `AI is temporarily rate-limited, so this report uses MirrorWise's local decision engine. Current best-fit direction: ${topCondition?.recommendation || options[0]}.`,
+            recommendation: `AI is temporarily rate-limited, so this report uses Decision Mirror's local decision engine. Current best-fit direction: ${topCondition?.recommendation || options[0]}.`,
             confidence: mapConfidence(topCondition?.confidence),
             reversibility: 'Revisit after a short pause when new information arrives'
         },
@@ -164,10 +168,13 @@ function inferDecisionOptions(description, aiAnalysis) {
     ];
 }
 
-export default function NewDecision({ onNavigate }) {
+export default function NewDecision({ onNavigate, onOpenSettings }) {
     // describe → checkin → discuss → analyzing
     const [phase, setPhase] = useState('describe');
     const [description, setDescription] = useState('');
+    const [selectedTemplate, setSelectedTemplate] = useState(null);
+    const [showTemplates, setShowTemplates] = useState(true);
+    const [relevantHistory, setRelevantHistory] = useState([]);
 
     // Emotional Check-In
     const [emotionalScore, setEmotionalScore] = useState(50);
@@ -182,11 +189,14 @@ export default function NewDecision({ onNavigate }) {
     // eslint-disable-next-line no-unused-vars
     const [analyzeProgress, setAnalyzeProgress] = useState(0);
     const [analyzeStage, setAnalyzeStage] = useState('');
+    const [streamingText, setStreamingText] = useState('');
+    const [isStreaming, setIsStreaming] = useState(false);
     const [error, setError] = useState(null);
     const [cooldownRemainingMs, setCooldownRemainingMs] = useState(0);
 
     // Reactive API key check — polls so it updates when user saves key in Settings
     const [apiReady, setApiReady] = useState(() => isAIAvailable());
+    const aiMode = getAIAccessMode();
 
     const textareaRef = useRef(null);
     const answerRef = useRef(null);
@@ -217,6 +227,14 @@ export default function NewDecision({ onNavigate }) {
     }, [phase]);
 
     useEffect(() => {
+        if (description.trim().length > 20) {
+            setRelevantHistory(getRelevantHistory(description, 2));
+            return;
+        }
+        setRelevantHistory([]);
+    }, [description]);
+
+    useEffect(() => {
         if (answerRef.current) answerRef.current.focus();
     }, [currentQuestion]);
 
@@ -244,7 +262,8 @@ export default function NewDecision({ onNavigate }) {
         setError(null);
 
         try {
-            const firstQuestion = await generateNextQuestion(description, [], emotionalScore);
+            const templateContext = selectedTemplate ? getTemplateContextPrompt(selectedTemplate.id) : '';
+            const firstQuestion = await generateNextQuestion(description, [], emotionalScore, templateContext);
             if (firstQuestion) {
                 setCurrentQuestion(firstQuestion);
                 setPhase('discuss');
@@ -278,7 +297,8 @@ export default function NewDecision({ onNavigate }) {
         setError(null);
 
         try {
-            const nextQuestion = await generateNextQuestion(description, newHistory, emotionalScore);
+            const templateContext = selectedTemplate ? getTemplateContextPrompt(selectedTemplate.id) : '';
+            const nextQuestion = await generateNextQuestion(description, newHistory, emotionalScore, templateContext);
 
             if (nextQuestion) {
                 setCurrentQuestion(nextQuestion);
@@ -299,6 +319,8 @@ export default function NewDecision({ onNavigate }) {
     const performAnalysis = async (history) => {
         setPhase('analyzing');
         setAnalyzeProgress(0);
+        setStreamingText('');
+        setIsStreaming(true);
         setError(null);
 
         const stages = [
@@ -326,7 +348,25 @@ export default function NewDecision({ onNavigate }) {
         }, 1500);
 
         try {
-            const aiAnalysis = await generateAnalysis(description, history, emotionalScore);
+            const userValues = getUserValues();
+            const templateContext = selectedTemplate ? getTemplateContextPrompt(selectedTemplate.id) : '';
+            let aiAnalysis;
+
+            try {
+                aiAnalysis = await generateAnalysisStream(
+                    description,
+                    history,
+                    emotionalScore,
+                    userValues,
+                    templateContext,
+                    (_chunk, fullText) => setStreamingText(fullText)
+                );
+            } catch (streamError) {
+                console.warn('Streaming failed, falling back:', streamError);
+                setIsStreaming(false);
+                aiAnalysis = await generateAnalysis(description, history, emotionalScore, userValues, templateContext);
+            }
+
             const answers = history.map(item => item.answer);
             const options = inferDecisionOptions(description, aiAnalysis);
 
@@ -334,7 +374,7 @@ export default function NewDecision({ onNavigate }) {
                 description,
                 options,
                 answers,
-                getUserValues(),
+                userValues,
                 emotionalScore
             );
 
@@ -364,6 +404,7 @@ export default function NewDecision({ onNavigate }) {
                 generatedAt: Date.now(),
                 mode: 'hybrid-analysis'
             };
+            setIsStreaming(false);
 
             clearInterval(stageInterval);
             setAnalyzeProgress(100);
@@ -377,6 +418,7 @@ export default function NewDecision({ onNavigate }) {
                 answers: history,
                 emotionalScore,
                 analysis: analysis,
+                templateId: selectedTemplate?.id || null,
             });
 
             setTimeout(() => {
@@ -398,6 +440,7 @@ export default function NewDecision({ onNavigate }) {
                     getUserValues(),
                     emotionalScore
                 );
+                setIsStreaming(false);
 
                 const aiFallback = buildLocalFallbackAIAnalysis({
                     description,
@@ -440,6 +483,7 @@ export default function NewDecision({ onNavigate }) {
                     answers: history,
                     emotionalScore,
                     analysis: analysis,
+                    templateId: selectedTemplate?.id || null,
                 });
 
                 setTimeout(() => {
@@ -454,6 +498,7 @@ export default function NewDecision({ onNavigate }) {
 
             clearInterval(stageInterval);
             console.error('Analysis failed:', err);
+            setIsStreaming(false);
             setError(err.message || 'Analysis failed. Please try again.');
             setAnalyzeProgress(0);
             setAnalyzeStage('');
@@ -467,6 +512,9 @@ export default function NewDecision({ onNavigate }) {
     const currentEmotionLabel = getEmotionLabel(emotionalScore);
     const retryCooldownSeconds = Math.max(0, Math.ceil(cooldownRemainingMs / 1000));
     const isRetryCooldownActive = retryCooldownSeconds > 0;
+    const openSettings = () => {
+        if (onOpenSettings) onOpenSettings();
+    };
 
     // ============================================
     // STEP INDICATOR
@@ -480,7 +528,7 @@ export default function NewDecision({ onNavigate }) {
     const currentStepIndex = steps.findIndex(s => s.key === phase);
 
     const renderStepIndicator = () => (
-        <div className="flow-progress" style={{ animation: 'fadeInUp 0.5s var(--ease-out)' }}>
+        <div className="flow-progress">
             {steps.map((step, i) => (
                 <div key={step.key} className="flow-step">
                     <div className={`step-dot ${i === currentStepIndex ? 'active' : ''} ${i < currentStepIndex ? 'completed' : ''}`}>
@@ -500,7 +548,24 @@ export default function NewDecision({ onNavigate }) {
     const renderDescribe = () => (
         <div className="decision-flow">
             {renderStepIndicator()}
-            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-editorial)' }}>
+
+            {showTemplates && (
+                <div className="panel decision-input-container">
+                    <TemplateSelector
+                        onSelect={(template) => {
+                            setSelectedTemplate(template);
+                            setShowTemplates(false);
+                        }}
+                        onSkip={() => {
+                            setSelectedTemplate(null);
+                            setShowTemplates(false);
+                        }}
+                    />
+                </div>
+            )}
+
+            {!showTemplates && (
+            <div className="glass-card decision-input-container">
                 <div className="describe-header">
                     <h2>What's weighing on your mind?</h2>
                     <p className="subtitle">
@@ -513,7 +578,7 @@ export default function NewDecision({ onNavigate }) {
                     <textarea
                         ref={textareaRef}
                         className="text-area text-area-large"
-                        placeholder="e.g., I've been offered a job in another city but my partner doesn't want to move. The pay is significantly better and it's in the field I've always wanted to work in, but I'm scared of what it might do to our relationship..."
+                        placeholder={selectedTemplate?.placeholder || "e.g., I've been offered a job in another city but my partner doesn't want to move. The pay is significantly better and it's in the field I've always wanted to work in, but I'm scared of what it might do to our relationship..."}
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         maxLength={3000}
@@ -527,8 +592,8 @@ export default function NewDecision({ onNavigate }) {
                     </div>
                 </div>
 
-                {!apiReady && (
-                    <div className="setup-prompt glass-card" style={{
+                {!apiReady && aiMode === 'client' && (
+                    <div className="setup-prompt" style={{
                         marginTop: '1.5rem',
                         background: 'var(--bg-hover-wash)',
                         border: '1px solid var(--border-hairline)',
@@ -543,10 +608,24 @@ export default function NewDecision({ onNavigate }) {
                         </p>
                         <button
                             className="btn btn-primary btn-sm"
-                            onClick={() => document.querySelector('.nav-link[title="Settings"]')?.click()}
+                            onClick={openSettings}
                         >
                             Open Settings
                         </button>
+                    </div>
+                )}
+
+                {!getUserValues() && (
+                    <div className="values-nudge">
+                        <p>
+                            Tip: <button className="link-btn" onClick={() => onNavigate('values')} type="button">Define your values</button> for personalized recommendations.
+                        </p>
+                    </div>
+                )}
+
+                {relevantHistory.length > 0 && (
+                    <div className="history-context">
+                        <p>You've made similar decisions before. The AI will reference your history.</p>
                     </div>
                 )}
 
@@ -575,6 +654,7 @@ export default function NewDecision({ onNavigate }) {
                     </p>
                 )}
             </div>
+            )}
         </div>
     );
 
@@ -584,7 +664,7 @@ export default function NewDecision({ onNavigate }) {
     const renderCheckin = () => (
         <div className="decision-flow">
             {renderStepIndicator()}
-            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-editorial)' }}>
+            <div className="glass-card decision-input-container">
                 <div className="describe-header">
                     <h2>Before we analyze — how are you feeling?</h2>
                     <p className="subtitle">
@@ -669,7 +749,7 @@ export default function NewDecision({ onNavigate }) {
                             {isThinking ? 'Preparing...' : 'Begin Exploration →'}
                         </button>
                     ) : (
-                        <button className="btn btn-primary btn-lg" onClick={() => document.querySelector('.nav-link[title="Settings"]')?.click()}>
+                        <button className="btn btn-primary btn-lg" onClick={openSettings}>
                             Add API Key to Continue
                         </button>
                     )}
@@ -758,7 +838,7 @@ export default function NewDecision({ onNavigate }) {
                     ))}
 
                     {currentQuestion && !isThinking && (
-                        <div className="exchange-pair current-exchange" style={{ animation: 'fadeInUp 0.5s var(--ease-editorial)', marginBottom: 'var(--space-5)' }}>
+                        <div className="exchange-pair current-exchange" style={{ marginBottom: 'var(--space-5)' }}>
                             <div className="msg msg-ai">
                                 <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: '1.0625rem', lineHeight: 1.6, color: 'var(--text-ink)' }}>
                                     {currentQuestion}
@@ -776,7 +856,7 @@ export default function NewDecision({ onNavigate }) {
 
                 {/* Answer input */}
                 {currentQuestion && !isThinking && (
-                    <div className="answer-area glass-card" style={{ animation: 'fadeInUp 0.5s var(--ease-editorial) 0.2s backwards' }}>
+                    <div className="answer-area glass-card">
                         <textarea
                             ref={answerRef}
                             className="text-area"
@@ -844,7 +924,14 @@ export default function NewDecision({ onNavigate }) {
                     </div>
                 </div>
             ) : (
-                <LoadingState currentStage={analyzeStage} />
+                <div>
+                    <LoadingState currentStage={analyzeStage} />
+                    {isStreaming && streamingText && (
+                        <div className="streaming-preview panel">
+                            <pre className="streaming-text">{streamingText}</pre>
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );

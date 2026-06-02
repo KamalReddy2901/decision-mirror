@@ -52,7 +52,7 @@ export async function generateDecisionPDF(decisionData) {
         pdf.setFontSize(7);
         pdf.setFont('helvetica', 'italic');
         pdf.setTextColor(...C.faint);
-        pdf.text('MirrorWise — AI-Powered Decision Intelligence', W / 2, H - 8, { align: 'center' });
+        pdf.text('Decision Mirror — AI-Powered Decision Intelligence', W / 2, H - 8, { align: 'center' });
         pdf.text(`Page ${pdf.getNumberOfPages()}`, W - M, H - 8, { align: 'right' });
     };
 
@@ -95,7 +95,7 @@ export async function generateDecisionPDF(decisionData) {
     pdf.setTextColor(...C.white);
     pdf.setFontSize(22);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('MirrorWise', M, 22);
+    pdf.text('Decision Mirror', M, 22);
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'normal');
     pdf.text('AI-Powered Decision Intelligence Report', M, 32);
@@ -121,7 +121,7 @@ export async function generateDecisionPDF(decisionData) {
     if (!analysis?.verdict) {
         txt('Legacy analysis format — view full details in the app.', 10, 'italic', C.light);
         addFooter();
-        pdf.save(`mirrorwise-${Date.now()}.pdf`);
+        pdf.save(`decision-mirror-${Date.now()}.pdf`);
         return;
     }
 
@@ -423,7 +423,7 @@ export async function generateDecisionPDF(decisionData) {
             newPage(90);
             heading('Impact Profile Radar');
             const canvas = await html2canvas(chartElement, {
-                backgroundColor: '#1a1a2e',
+                backgroundColor: '#F4F1EA',
                 scale: 2,
                 logging: false
             });
@@ -537,5 +537,5 @@ export async function generateDecisionPDF(decisionData) {
     // ═══════════════ FOOTER ON LAST PAGE ═══════════════
     addFooter();
 
-    pdf.save(`mirrorwise-${Date.now()}.pdf`);
+    pdf.save(`decision-mirror-${Date.now()}.pdf`);
 }

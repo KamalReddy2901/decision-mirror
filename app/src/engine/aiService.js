@@ -1,11 +1,12 @@
 /**
- * AI Service — The Brain of MirrorWise
+ * AI Service — The Brain of Decision Mirror
  * 
  * Context-aware decision intelligence powered by Groq + Llama 3.
  * All analysis flows through here.
  */
 
 import { sanitizeCommunityInsights } from './communitySafety';
+import { getRelevantHistory, formatHistoryForPrompt } from './storage';
 
 let Groq = null;
 let groq = null;
@@ -14,7 +15,7 @@ const FALLBACK_MODEL = "llama-3.1-8b-instant"; // Fast fallback model
 const STORAGE_KEY = 'dm_groq_api_key';
 const RATE_LIMIT_UNTIL_KEY = 'dm_groq_rate_limit_until';
 const EMBEDDED_API_KEY = String(import.meta.env?.VITE_GROQ_API_KEY || '').trim();
-const AI_ACCESS_MODE = String(import.meta.env?.VITE_AI_MODE || 'client').trim().toLowerCase();
+const AI_ACCESS_MODE = String(import.meta.env?.VITE_AI_MODE || 'server').trim().toLowerCase();
 const SERVER_PROXY_PATH = String(import.meta.env?.VITE_AI_PROXY_PATH || '/api/groq').trim();
 
 function isServerManagedMode() {
@@ -230,8 +231,8 @@ async function createChatCompletion(params) {
         return response.json();
     }
 
-    if (!groq) {
-        throw new Error("AI not configured. Please add your Groq API key in Settings.");
+    if (!isAIAvailable()) {
+        throw new Error("AI service temporarily unavailable. Please try again.");
     }
 
     return groq.chat.completions.create(params);
@@ -254,15 +255,47 @@ YOUR FRAMEWORKS (apply the most relevant):
 YOUR PRINCIPLES:
 1. NEVER give generic advice. Every insight must be specific to THIS person's situation.
 2. Identify the hidden emotional driver beneath the stated rational concern.
-3. Name the specific cognitive bias if you detect one — cite the research.
+3. Name the specific cognitive bias if you detect one — ALWAYS cite the research (Author, Year).
 4. Be warm but DIRECT. Have the courage to give a clear recommendation with reasoning.
 5. Surface what the person is NOT saying — the unspoken fear or desire.
 6. Always distinguish between reversible and irreversible decisions.
+7. CITE YOUR SOURCES: When making claims about psychology, behavior, or statistics, reference the research.
 
 YOUR VOICE:
 - Speak like a wise mentor who has read all the research but talks like a human.
 - Use concrete language, not platitudes. "You're afraid of being alone" not "there are emotional considerations."
 - Short, punchy sentences mixed with deeper explanations.`;
+
+const QUICK_VERDICT_PROMPT = `You are a decisive advisor. The user needs a quick, clear verdict on a simple decision. No lengthy analysis - just actionable clarity.
+
+Respond with JSON only:
+{
+    "title": "Clear action statement (e.g., 'Buy the headphones' or 'Skip the meeting')",
+    "recommendation": "2-3 sentences explaining why. Be direct and specific.",
+    "confidence": "high|medium|low",
+    "reversibility": "One sentence: how easily can this be undone?",
+    "keyConsideration": "The ONE thing that matters most for this decision",
+    "oneThingToCheck": "One quick thing they should verify before acting",
+    "biasRisk": 20-80
+}`;
+
+const COMPARISON_PROMPT = `You are a decision analyst comparing two options head-to-head. Be specific and decisive.
+
+Respond with JSON only:
+{
+    "winner": "The option name you recommend (exact text from input)",
+    "reasoning": "2-3 sentences explaining why this option wins",
+    "confidence": "high|medium|low",
+    "reversibility": "Brief note on how reversible each choice is",
+    "optionAScore": 1-100,
+    "optionBScore": 1-100,
+    "optionAPros": ["pro 1", "pro 2", "pro 3"],
+    "optionACons": ["con 1", "con 2"],
+    "optionBPros": ["pro 1", "pro 2", "pro 3"],
+    "optionBCons": ["con 1", "con 2"],
+    "tiebreaker": "If scores are close, what single factor should decide?",
+    "valuesAlignment": "Which option better aligns with stated values and why (or null if no values provided)"
+}`;
 
 const FOLLOW_UP_WRONGDOING_RE = /\b(steal|theft|rob|burglary|fraud|scam|assault|harm|hurt|kill|illegal|crime|criminal|violent|violence|weapon)\b/i;
 const FOLLOW_UP_ENCOURAGEMENT_RE = /\b(worth considering|you should|do it|go for it|best option|smart move|works for you|only choice|just do)\b/i;
@@ -315,8 +348,8 @@ function extractJSON(text) {
 const MAX_QUESTIONS = 5;
 const MIN_QUESTIONS = 3;
 
-export async function generateNextQuestion(description, history = [], emotionalScore = null) {
-    if (!groq) return null;
+export async function generateNextQuestion(description, history = [], emotionalScore = null, templateContext = '') {
+    if (!isAIAvailable()) return null;
     guardRateLimitCooldown();
 
     // Hard limit on questions
@@ -332,13 +365,22 @@ export async function generateNextQuestion(description, history = [], emotionalS
         ? `\n\nCONVERSATION SO FAR:\n${history.map((h, i) => `Q${i+1}: ${h.question}\nTheir answer: ${h.answer}`).join('\n\n')}`
         : '\n\nNo questions asked yet — this is the opening question.';
 
+    const templateGuidance = templateContext
+        ? `\n\nTEMPLATE CONTEXT: ${templateContext}`
+        : '';
+
+    const relevantHistory = getRelevantHistory(description, 2);
+    const historyContext = relevantHistory.length > 0
+        ? `\n\nUSER HAS MADE SIMILAR DECISIONS BEFORE:\n${relevantHistory.map(d => `- "${String(d.description || '').slice(0, 100)}..." -> ${d.analysis?.verdict?.title || 'decided'}`).join('\n')}`
+        : '';
+
     try {
         const chatCompletion = await createChatCompletion({
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 {
                     role: "user",
-                    content: `USER'S SITUATION: "${description}"${emotionalContext}${conversationSoFar}
+                    content: `USER'S SITUATION: "${description}"${emotionalContext}${templateGuidance}${historyContext}${conversationSoFar}
 
 This is question ${questionNumber} of up to ${MAX_QUESTIONS}.
 ${!canFinish ? `You MUST ask a question. You need at least ${MIN_QUESTIONS} questions before you can finish. Do NOT return done:true yet.` : `You may return {"done": true} ONLY if you genuinely have enough detail about their specific situation, emotions, fears, timeline, and stakeholders to produce a deeply personalized analysis. If ANY of these areas are unclear, ask another question.`}
@@ -389,8 +431,8 @@ Return JSON: {"done": false, "question": "your single focused question"}`
 // FULL ANALYSIS
 // ============================================
 
-export async function generateAnalysis(description, history = [], emotionalScore = null) {
-    if (!groq) throw new Error("AI not configured. Please add your Groq API key in Settings.");
+export async function generateAnalysis(description, history = [], emotionalScore = null, userValues = null, templateContext = '') {
+    if (!isAIAvailable()) throw new Error("AI service temporarily unavailable. Please try again.");
     guardRateLimitCooldown();
 
     const emotionalContext = emotionalScore !== null
@@ -401,7 +443,17 @@ export async function generateAnalysis(description, history = [], emotionalScore
         ? `\n\nDEEP-DIVE CONVERSATION (${history.length} exchanges):\n${history.map((h, i) => `Q${i+1}: ${h.question}\nUser said: "${h.answer}"`).join('\n\n')}`
         : '\n\nNo conversation — analyze based on initial description only.';
 
-    const analysisPrompt = `USER'S SITUATION: "${description}"${emotionalContext}${conversationContext}
+    const valuesContext = userValues
+        ? `\n\nUSER'S CORE VALUES (1-10 priority scale):\n${Object.entries(userValues).map(([k, v]) => `- ${k}: ${v}/10`).join('\n')}\n\nIMPORTANT: Your analysis and recommendations MUST account for these values. If a recommendation conflicts with a high-priority value (7+), explicitly acknowledge the trade-off.`
+        : '';
+
+    const relevantHistory = getRelevantHistory(description);
+    const historyContext = formatHistoryForPrompt(relevantHistory);
+    const templateGuidance = templateContext
+        ? `\n\nTEMPLATE CONTEXT: ${templateContext}`
+        : '';
+
+    const analysisPrompt = `USER'S SITUATION: "${description}"${emotionalContext}${valuesContext}${templateGuidance}${historyContext}${conversationContext}
 
 TASK: You have deeply explored this person's situation. Now produce a comprehensive, PERSONALIZED decision analysis.
 
@@ -414,6 +466,7 @@ Return JSON with these EXACT fields:
     "title": "A clear, specific title (e.g., 'Take the Berlin Job' or 'Stay and Renegotiate')",
     "recommendation": "Your clear recommendation with reasoning (3-4 sentences). Reference specific things they said. Be direct — they came here for clarity, not more confusion.",
     "confidence": "high|medium|low",
+        "confidenceExplanation": "1-2 sentences explaining why this confidence level",
     "reversibility": "How easily can this be undone? Be specific to their situation."
   },
   "emotionalInsight": {
@@ -597,7 +650,7 @@ CRITICAL RULES:
 // ============================================
 
 export async function askFollowUp({ description, analysis, topic, question, chatHistory = [] }) {
-    if (!groq) throw new Error("AI not configured. Please add your Groq API key in Settings.");
+    if (!isAIAvailable()) throw new Error("AI service temporarily unavailable. Please try again.");
     guardRateLimitCooldown();
 
     const verdict = analysis?.verdict;
@@ -696,4 +749,163 @@ Respond in plain text (no JSON). Speak naturally.`;
             throw new Error("Failed to get a response. Please try again in a moment.");
         }
     }
+}
+
+export async function generateQuickVerdict(description, userValues = null) {
+    if (!isAIAvailable()) {
+        throw new Error('AI service is not available right now. Please try again.');
+    }
+    guardRateLimitCooldown();
+
+    const valuesContext = userValues
+        ? `\nUser's stated priorities: ${Object.entries(userValues).map(([k, v]) => `${k}: ${v}/10`).join(', ')}`
+        : '';
+
+    try {
+        const chatCompletion = await createChatCompletion({
+            messages: [
+                { role: 'system', content: QUICK_VERDICT_PROMPT },
+                {
+                    role: 'user',
+                    content: `DECISION: "${description}"${valuesContext}\n\nGive me your quick verdict. JSON only.`
+                }
+            ],
+            model: FALLBACK_MODEL,
+            temperature: 0.5,
+            max_tokens: 400
+        });
+
+        const text = chatCompletion.choices[0]?.message?.content || '';
+        const parsed = extractJSON(text);
+
+        return {
+            title: parsed.title || 'Make your choice',
+            recommendation: parsed.recommendation || 'Consider the practical implications and your gut feeling.',
+            confidence: parsed.confidence || 'medium',
+            reversibility: parsed.reversibility || 'Depends on the specific situation.',
+            keyConsideration: parsed.keyConsideration || 'What matters most to you right now?',
+            oneThingToCheck: parsed.oneThingToCheck || 'Sleep on it if you can.',
+            biasRisk: typeof parsed.biasRisk === 'number' ? parsed.biasRisk : 40
+        };
+    } catch (error) {
+        console.error('Quick verdict failed:', error);
+        return {
+            title: 'Pause and reflect',
+            recommendation: 'The AI service encountered an issue. Take a moment to list pros and cons manually, then trust your gut.',
+            confidence: 'low',
+            reversibility: 'Unknown - consider whether this decision is reversible.',
+            keyConsideration: 'What would you regret more: doing this or not doing it?',
+            oneThingToCheck: 'Can you undo this if it goes wrong?',
+            biasRisk: 50
+        };
+    }
+}
+
+export async function generateComparisonAnalysis(optionA, optionB, context = '', userValues = null) {
+    if (!isAIAvailable()) {
+        throw new Error('AI service is not available right now.');
+    }
+    guardRateLimitCooldown();
+
+    const valuesContext = userValues
+        ? `\nUser's priorities: ${Object.entries(userValues).map(([k, v]) => `${k}: ${v}/10`).join(', ')}`
+        : '';
+    const contextStr = context ? `\nContext: ${context}` : '';
+
+    const chatCompletion = await createChatCompletion({
+        messages: [
+            { role: 'system', content: COMPARISON_PROMPT },
+            {
+                role: 'user',
+                content: `Compare these two options:\n\nOPTION A: "${optionA}"\nOPTION B: "${optionB}"${contextStr}${valuesContext}\n\nWhich should they choose? JSON only.`
+            }
+        ],
+        model: MODEL,
+        temperature: 0.6,
+        max_tokens: 600
+    });
+
+    const text = chatCompletion.choices[0]?.message?.content || '';
+    return extractJSON(text);
+}
+
+export async function generateAnalysisStream(description, history = [], emotionalScore = null, userValues = null, templateContext = '', onChunk = () => {}) {
+    if (!isAIAvailable()) {
+        throw new Error('AI service temporarily unavailable. Please try again.');
+    }
+    guardRateLimitCooldown();
+
+    const emotionalContext = emotionalScore !== null
+        ? `\nEMOTIONAL INTENSITY (self-reported): ${emotionalScore}/100`
+        : '';
+
+    const conversationContext = history.length > 0
+        ? `\n\nDEEP-DIVE CONVERSATION (${history.length} exchanges):\n${history.map((h, i) => `Q${i + 1}: ${h.question}\nUser said: "${h.answer}"`).join('\n\n')}`
+        : '\n\nNo conversation - analyze based on initial description only.';
+
+    const valuesContext = userValues
+        ? `\n\nUSER'S CORE VALUES:\n${Object.entries(userValues).map(([k, v]) => `- ${k}: ${v}/10`).join('\n')}`
+        : '';
+
+    const relevantHistory = getRelevantHistory(description);
+    const historyContext = formatHistoryForPrompt(relevantHistory);
+    const templateGuidance = templateContext
+        ? `\n\nTEMPLATE CONTEXT: ${templateContext}`
+        : '';
+
+    const analysisPrompt = `USER'S SITUATION: "${description}"${emotionalContext}${valuesContext}${templateGuidance}${historyContext}${conversationContext}
+
+TASK: Produce a comprehensive decision analysis. Return valid JSON with all required fields.`;
+
+    const response = await fetch(SERVER_PROXY_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: analysisPrompt }
+            ],
+            model: MODEL,
+            temperature: 0.7,
+            max_tokens: 4000,
+            stream: true
+        })
+    });
+
+    if (!response.ok || !response.body) {
+        throw new Error(`Stream request failed: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+                const parsed = JSON.parse(data);
+                const content = parsed.choices?.[0]?.delta?.content;
+                if (content) {
+                    fullText += content;
+                    onChunk(content, fullText);
+                }
+            } catch {
+                // Ignore malformed incremental chunks.
+            }
+        }
+    }
+
+    return extractJSON(fullText);
 }

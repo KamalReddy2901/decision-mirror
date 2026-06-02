@@ -2,6 +2,8 @@ import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { Settings, Menu, X } from 'lucide-react';
 import Landing from './pages/Landing';
 import NewDecision from './pages/NewDecision';
+import QuickDecision from './pages/QuickDecision';
+import CompareMode from './pages/CompareMode';
 const AnalysisView = lazy(() => import('./pages/AnalysisView'));
 import Dashboard from './pages/Dashboard';
 import DecisionDetail from './pages/DecisionDetail';
@@ -36,7 +38,7 @@ const _initialShare = getInitialSharedAnalysis();
 class AppErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error, info) { console.error('MirrorWise crashed:', error, info); }
+  componentDidCatch(error, info) { console.error('Decision Mirror crashed:', error, info); }
   render() {
     if (this.state.hasError) {
       return (
@@ -82,7 +84,11 @@ export default function App() {
       case 'landing':
         return <Landing onNavigate={navigate} />;
       case 'new-decision':
-        return <NewDecision onNavigate={navigate} />;
+        return <NewDecision onNavigate={navigate} onOpenSettings={() => setShowSettings(true)} />;
+      case 'quick':
+        return <QuickDecision onNavigate={navigate} />;
+      case 'compare':
+        return <CompareMode onNavigate={navigate} />;
       case 'analysis': {
         // Handle both object wrapper and direct analysis for backward compatibility
         const analysisData = currentAnalysis?.analysis || currentAnalysis;

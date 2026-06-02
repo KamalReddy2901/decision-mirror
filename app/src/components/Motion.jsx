@@ -7,45 +7,62 @@
  * - Intentional hover states (not translateY bounce)
  */
 
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
-// Removed unused editorialEase constant - using CSS animations instead
+const editorialEase = [0.16, 1, 0.3, 1];
+const MotionDiv = motion.div;
+const MotionSpan = motion.span;
 
-export const PageTransition = ({ children, pageKey }) => (
-  <AnimatePresence mode="wait">
-    <div
-      key={pageKey}
-      style={{ animation: 'fadeIn 0.5s var(--ease-editorial)' }}
+export const PageTransition = ({ children, pageKey }) => {
+  const reduceMotion = useReducedMotion();
+  return (
+    <AnimatePresence mode="wait">
+      <MotionDiv
+        key={pageKey}
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+        transition={{ duration: 0.5, ease: editorialEase }}
+      >
+        {children}
+      </MotionDiv>
+    </AnimatePresence>
+  );
+};
+
+export const CascadeItem = ({ children, delay = 0, ...props }) => {
+  const reduceMotion = useReducedMotion();
+  return (
+    <MotionDiv
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay, ease: editorialEase }}
+      {...props}
     >
       {children}
-    </div>
-  </AnimatePresence>
-);
-
-export const CascadeItem = ({ children, delay = 0, ...props }) => (
-  <div
-    style={{
-      animation: `fadeInUp 0.5s var(--ease-editorial) ${delay}s backwards`
-    }}
-    {...props}
-  >
-    {children}
-  </div>
-);
+    </MotionDiv>
+  );
+};
 
 export const CascadeList = ({ children }) => (
-  <div style={{ animation: 'fadeIn 0.5s var(--ease-editorial)' }}>
+  <MotionDiv
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ duration: 0.5, ease: editorialEase }}
+  >
     {children}
-  </div>
+  </MotionDiv>
 );
 
 export const CascadeListItem = ({ children, ...props }) => (
-  <div
-    style={{ animation: 'fadeInUp 0.5s var(--ease-editorial)' }}
+  <MotionDiv
+    initial={{ opacity: 0, y: 8 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5, ease: editorialEase }}
     {...props}
   >
     {children}
-  </div>
+  </MotionDiv>
 );
 
 // Vermilion underline that draws left-to-right
@@ -55,7 +72,10 @@ export const VermilionUnderline = ({ children, ...props }) => (
     {...props}
   >
     {children}
-    <span
+    <MotionSpan
+      initial={{ scaleX: 0 }}
+      animate={{ scaleX: 1 }}
+      transition={{ duration: 0.6, delay: 0.2, ease: editorialEase }}
       style={{
         position: 'absolute',
         bottom: '-4px',
@@ -63,7 +83,6 @@ export const VermilionUnderline = ({ children, ...props }) => (
         right: 0,
         height: '2px',
         background: 'var(--accent-vermilion)',
-        animation: 'scaleXIn 0.6s var(--ease-editorial) 0.2s backwards',
         transformOrigin: 'left'
       }}
     />
@@ -74,9 +93,14 @@ export const VermilionUnderline = ({ children, ...props }) => (
 export const ModalTransition = ({ children, isOpen }) => (
   <AnimatePresence>
     {isOpen && (
-      <div style={{ animation: 'fadeIn 0.3s var(--ease-editorial)' }}>
+      <MotionDiv
+        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+        transition={{ duration: 0.3, ease: editorialEase }}
+      >
         {children}
-      </div>
+      </MotionDiv>
     )}
   </AnimatePresence>
 );

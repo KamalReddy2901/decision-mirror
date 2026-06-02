@@ -92,10 +92,10 @@ export default function SettingsModal({ isOpen, onClose }) {
                             </div>
 
                             {serverManagedMode && (
-                                <div style={{ marginBottom: 'var(--space-5)', padding: 'var(--space-4)', border: '1px solid var(--border-hairline)', background: 'var(--bg-hover-wash)' }}>
+                                <div className="settings-info" style={{ marginBottom: 'var(--space-5)', padding: 'var(--space-4)', border: '1px solid var(--border-hairline)', background: 'var(--bg-hover-wash)' }}>
                                     <h4 style={{ fontFamily: 'var(--font-body)', fontSize: '0.9375rem', fontWeight: 600, marginBottom: 'var(--space-2)' }}>Server-managed AI is active</h4>
                                     <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.6 }}>
-                                        Users can use AI features without entering their own API keys. Requests are routed through your secured backend proxy.
+                                        AI is configured server-side. No API key needed.
                                     </p>
                                 </div>
                             )}
@@ -109,39 +109,37 @@ export default function SettingsModal({ isOpen, onClose }) {
                                 </div>
                             )}
 
-                            <div className="input-group" style={{ marginBottom: 'var(--space-5)' }}>
-                                <label htmlFor="api-key" style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 600, fontSize: '0.875rem' }}>
-                                    {serverManagedMode ? 'Optional Personal Groq API Key (Override)' : 'Groq API Key (Free Tier)'}
-                                </label>
-                                <input
-                                    id="api-key"
-                                    type="password"
-                                    className="text-input"
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder="gsk_..."
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') handleSave();
-                                    }}
-                                />
-                                <small style={{ display: 'block', marginTop: 'var(--space-2)', color: 'var(--text-tertiary)', fontSize: '0.8125rem', lineHeight: 1.5 }}>
-                                    Get your free key from{' '}
-                                    <a
-                                        href="https://console.groq.com/keys"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{ color: 'var(--accent-vermilion)', textDecoration: 'underline' }}
-                                    >
-                                        console.groq.com
-                                    </a>
-                                    {' '}— takes 10 seconds
-                                    {serverManagedMode
-                                        ? '. Optional: save your own key for extended personal limits. Clear it anytime to return to server-managed mode.'
-                                        : usingEmbeddedKey
-                                            ? '. Leave empty to keep using the deployment key.'
-                                            : ''}
-                                </small>
-                            </div>
+                            {!serverManagedMode && (
+                                <div className="input-group" style={{ marginBottom: 'var(--space-5)' }}>
+                                    <label htmlFor="api-key" style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 600, fontSize: '0.875rem' }}>
+                                        Groq API Key (Free Tier)
+                                    </label>
+                                    <input
+                                        id="api-key"
+                                        type="password"
+                                        className="text-input"
+                                        value={apiKey}
+                                        onChange={(e) => setApiKey(e.target.value)}
+                                        placeholder="gsk_..."
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleSave();
+                                        }}
+                                    />
+                                    <small style={{ display: 'block', marginTop: 'var(--space-2)', color: 'var(--text-tertiary)', fontSize: '0.8125rem', lineHeight: 1.5 }}>
+                                        Get your free key from{' '}
+                                        <a
+                                            href="https://console.groq.com/keys"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{ color: 'var(--accent-vermilion)', textDecoration: 'underline' }}
+                                        >
+                                            console.groq.com
+                                        </a>
+                                        {' '}— takes 10 seconds
+                                        {usingEmbeddedKey ? '. Leave empty to keep using the deployment key.' : ''}
+                                    </small>
+                                </div>
+                            )}
 
                             <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
                                 {saved ? (
@@ -155,25 +153,9 @@ export default function SettingsModal({ isOpen, onClose }) {
                                 ) : (
                                     <>
                                         {serverManagedMode ? (
-                                            <>
-                                                {apiKey.trim() ? (
-                                                    <button className="btn btn-primary" onClick={handleSave} style={{ flex: 1 }}>
-                                                        Save Personal Key
-                                                    </button>
-                                                ) : (
-                                                    <button className="btn btn-primary" onClick={onClose} style={{ flex: 1 }}>
-                                                        Continue →
-                                                    </button>
-                                                )}
-                                                {apiKey && (
-                                                    <button
-                                                        className="btn btn-ghost"
-                                                        onClick={handleClear}
-                                                    >
-                                                        Use Server-Managed Key
-                                                    </button>
-                                                )}
-                                            </>
+                                            <button className="btn btn-primary" onClick={onClose} style={{ flex: 1 }}>
+                                                Continue →
+                                            </button>
                                         ) : (
                                             <>
                                                 <button

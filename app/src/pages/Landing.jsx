@@ -90,7 +90,13 @@ export default function Landing({ onNavigate }) {
                 <CascadeItem delay={0.3}>
                     <div style={{ display: 'flex', gap: 'var(--space-4)', justifyContent: 'center', flexWrap: 'wrap' }}>
                         <button className="btn btn-primary btn-lg" onClick={() => onNavigate('new-decision')}>
-                            Analyze a Decision
+                            Deep Analysis
+                        </button>
+                        <button className="btn btn-primary btn-lg" onClick={() => onNavigate('quick')}>
+                            Quick Verdict
+                        </button>
+                        <button className="btn btn-ghost btn-lg" onClick={() => onNavigate('compare')}>
+                            Compare Two Options
                         </button>
                         <button className="btn btn-ghost btn-lg" onClick={() => document.getElementById('science').scrollIntoView({ behavior: 'smooth' })}>
                             See the Science

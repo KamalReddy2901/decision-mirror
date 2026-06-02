@@ -21,57 +21,43 @@ const DECISION_TYPES = {
         keywords: ['job', 'career', 'work', 'promotion', 'resign', 'quit', 'salary', 'hire',
             'company', 'position', 'role', 'manager', 'boss', 'industry', 'profession',
             'startup', 'freelance', 'business', 'entrepreneur', 'office', 'remote'],
-        label: 'Career',
-        icon: '💼',
-        color: '#6366f1'
+        label: 'Career'
     },
     financial: {
         keywords: ['money', 'invest', 'buy', 'sell', 'loan', 'debt', 'savings', 'stock',
             'property', 'mortgage', 'rent', 'expense', 'budget', 'crypto', 'fund',
             'insurance', 'retirement', 'price', 'cost', 'afford', 'expensive'],
-        label: 'Financial',
-        icon: '💰',
-        color: '#34d399'
+        label: 'Financial'
     },
     relationship: {
         keywords: ['relationship', 'partner', 'marriage', 'dating', 'divorce', 'friend',
             'family', 'breakup', 'love', 'together', 'commitment', 'trust',
             'parents', 'children', 'sibling', 'spouse', 'boyfriend', 'girlfriend'],
-        label: 'Relationship',
-        icon: '💝',
-        color: '#f43f5e'
+        label: 'Relationship'
     },
     health: {
         keywords: ['health', 'medical', 'doctor', 'surgery', 'treatment', 'therapy',
             'mental', 'exercise', 'diet', 'wellness', 'medication', 'hospital',
             'illness', 'condition', 'stress', 'anxiety', 'depression', 'fitness'],
-        label: 'Health',
-        icon: '🏥',
-        color: '#2dd4bf'
+        label: 'Health'
     },
     education: {
         keywords: ['college', 'university', 'degree', 'school', 'study', 'course',
             'learn', 'student', 'masters', 'phd', 'certification', 'training',
             'exam', 'major', 'graduate', 'dropout', 'academic', 'scholarship'],
-        label: 'Education',
-        icon: '🎓',
-        color: '#a855f7'
+        label: 'Education'
     },
     lifestyle: {
         keywords: ['move', 'relocate', 'city', 'country', 'travel', 'hobby',
             'house', 'apartment', 'lifestyle', 'habit', 'routine', 'balance',
             'pet', 'vehicle', 'car', 'vacation', 'adventure'],
-        label: 'Lifestyle',
-        icon: '🌟',
-        color: '#fbbf24'
+        label: 'Lifestyle'
     },
     moral: {
         keywords: ['right', 'wrong', 'ethical', 'moral', 'conscience', 'principle',
             'honest', 'lie', 'cheat', 'fair', 'justice', 'responsibility',
             'confront', 'report', 'whistle', 'integrity'],
-        label: 'Moral/Ethical',
-        icon: '⚖️',
-        color: '#818cf8'
+        label: 'Moral/Ethical'
     }
 };
 
@@ -132,9 +118,9 @@ export function assessStakes(text) {
     const questionMarks = (text.match(/\?/g) || []).length;
     if (questionMarks >= 3) highScore += 1;
 
-    if (highScore > lowScore + 1) return { level: 'high', label: 'High Stakes', emoji: '🔴' };
-    if (lowScore > highScore + 1) return { level: 'low', label: 'Low Stakes', emoji: '🟢' };
-    return { level: 'medium', label: 'Medium Stakes', emoji: '🟡' };
+    if (highScore > lowScore + 1) return { level: 'high', label: 'High Stakes' };
+    if (lowScore > highScore + 1) return { level: 'low', label: 'Low Stakes' };
+    return { level: 'medium', label: 'Medium Stakes' };
 }
 
 // ============================================
@@ -152,8 +138,7 @@ const BIAS_PATTERNS = {
         description: 'You may be weighing past investment too heavily. The time, money, or effort already spent cannot be recovered — only future value matters.',
         reframe: 'Imagine you\'re starting fresh today with zero investment. Would you still choose this path? Judge options only by their future potential.',
         research: 'Arkes & Blumer (1985) — "The Psychology of Sunk Cost"',
-        severity: 8,
-        icon: '⚓'
+        severity: 8
     },
     status_quo: {
         name: 'Status Quo Bias',
@@ -165,8 +150,7 @@ const BIAS_PATTERNS = {
         description: 'There appears to be a strong preference for the current state. We tend to perceive change as loss, even when the change would be beneficial.',
         reframe: 'If you were NOT already in your current situation, would you actively choose it over the alternatives? Flip the default.',
         research: 'Samuelson & Zeckhauser (1988) — "Status Quo Bias in Decision Making"',
-        severity: 6,
-        icon: '🏠'
+        severity: 6
     },
     loss_aversion: {
         name: 'Loss Aversion',
@@ -178,8 +162,7 @@ const BIAS_PATTERNS = {
         description: 'Losses loom larger than gains in our minds. Research shows we feel losses about 2x more intensely than equivalent gains.',
         reframe: 'Instead of asking "What could go wrong?", ask "What am I missing by NOT taking this step?" Both frame the same uncertainty differently.',
         research: 'Kahneman & Tversky (1979) — "Prospect Theory"',
-        severity: 7,
-        icon: '🛡️'
+        severity: 7
     },
     confirmation: {
         name: 'Confirmation Bias',
@@ -191,8 +174,7 @@ const BIAS_PATTERNS = {
         description: 'You may have already formed a preference and are seeking information that confirms it. This is the most common and dangerous cognitive bias.',
         reframe: 'Steel-man the option you\'re LEAST inclined toward. What\'s the strongest possible argument for it? Give it a fair trial in your mind.',
         research: 'Nickerson (1998) — "Confirmation Bias: A Ubiquitous Phenomenon"',
-        severity: 8,
-        icon: '🔍'
+        severity: 8
     },
     anchoring: {
         name: 'Anchoring Effect',
@@ -204,8 +186,7 @@ const BIAS_PATTERNS = {
         description: 'You may be anchored to an initial piece of information (a number, an opinion, or first impression) that is disproportionately influencing your thinking.',
         reframe: 'What would your analysis look like if that first data point didn\'t exist? Try to evaluate from scratch without that anchor.',
         research: 'Tversky & Kahneman (1974) — "Judgment Under Uncertainty: Heuristics and Biases"',
-        severity: 5,
-        icon: '⚙️'
+        severity: 5
     },
     availability: {
         name: 'Availability Heuristic',
@@ -217,8 +198,7 @@ const BIAS_PATTERNS = {
         description: 'Recent or vivid examples may be overinfluencing your judgment. Just because something is memorable doesn\'t make it statistically likely.',
         reframe: 'What does the actual data say, beyond anecdotes? One story ≠ a pattern. Seek base rates, not narratives.',
         research: 'Tversky & Kahneman (1973) — "Availability: A Heuristic for Judging Frequency"',
-        severity: 5,
-        icon: '📰'
+        severity: 5
     },
     optimism: {
         name: 'Optimism Bias',
@@ -230,8 +210,7 @@ const BIAS_PATTERNS = {
         description: 'We tend to overestimate positive outcomes and underestimate risks. Planning fallacy (things taking longer/costing more) is a common manifestation.',
         reframe: 'What would a skeptical but well-meaning friend say about this plan? What\'s the realistic timeline/outcome, not the ideal one?',
         research: 'Sharot (2011) — "The Optimism Bias"',
-        severity: 6,
-        icon: '🌈'
+        severity: 6
     }
 };
 
@@ -340,12 +319,12 @@ export function generateQuestions(decisionType) {
 // ============================================
 
 const IMPACT_DIMENSIONS = [
-    { key: 'financial', label: 'Financial Impact', icon: '💰' },
-    { key: 'emotional', label: 'Emotional Wellbeing', icon: '🧠' },
-    { key: 'relationships', label: 'Relationships', icon: '👥' },
-    { key: 'growth', label: 'Personal Growth', icon: '🌱' },
-    { key: 'time', label: 'Time & Energy', icon: '⏰' },
-    { key: 'values', label: 'Values Alignment', icon: '💎' }
+    { key: 'financial', label: 'Financial Impact' },
+    { key: 'emotional', label: 'Emotional Wellbeing' },
+    { key: 'relationships', label: 'Relationships' },
+    { key: 'growth', label: 'Personal Growth' },
+    { key: 'time', label: 'Time & Energy' },
+    { key: 'values', label: 'Values Alignment' }
 ];
 
 export { IMPACT_DIMENSIONS };
@@ -588,42 +567,92 @@ const DEFAULT_VALUES = {
 
 export { DEFAULT_VALUES };
 
-export function calculateValuesAlignment(options, userValues) {
-    const values = userValues || DEFAULT_VALUES;
+export function calculateValuesAlignment(options, impactScoresOrValues, maybeUserValues) {
+    const usingImpactScores = Array.isArray(impactScoresOrValues);
+    const impactScores = usingImpactScores ? impactScoresOrValues : null;
+    const values = (usingImpactScores ? maybeUserValues : impactScoresOrValues) || DEFAULT_VALUES;
 
-    return options.map(option => {
-        const optLower = option.toLowerCase();
+    if (!values || options.length === 0) return [];
+
+    const valueToImpactMapping = {
+        growth: 'growth',
+        achievement: 'growth',
+        creativity: 'growth',
+        adventure: 'growth',
+        security: 'financial',
+        stability: 'financial',
+        freedom: 'time',
+        health: 'emotional',
+        relationships: 'relationships',
+        relationship: 'relationships',
+        family: 'relationships',
+        connection: 'relationships',
+        purpose: 'values'
+    };
+
+    return options.map((option, index) => {
+        const optionImpactScores = impactScores?.[index]?.scores || null;
+        const optLower = String(option || '').toLowerCase();
         const alignment = {};
+        let weightedSum = 0;
+        let totalWeight = 0;
+        const breakdown = [];
 
-        Object.entries(values).forEach(([value, importance]) => {
-            const valueLower = value.toLowerCase();
-            let score = 5; // baseline
+        Object.entries(values).forEach(([valueName, valueWeight]) => {
+            const normalizedName = String(valueName || '').toLowerCase();
+            const impactKey = valueToImpactMapping[normalizedName] || 'values';
+            const normalizedWeight = Number(valueWeight || 0) / 10;
 
-            // Simple heuristic: if option text relates to value, boost score
-            if (valueLower === 'security' && (optLower.includes('stable') || optLower.includes('safe') || optLower.includes('secure'))) score += 3;
-            if (valueLower === 'freedom' && (optLower.includes('free') || optLower.includes('independent') || optLower.includes('flexible'))) score += 3;
-            if (valueLower === 'growth' && (optLower.includes('learn') || optLower.includes('grow') || optLower.includes('develop'))) score += 3;
-            if (valueLower === 'creativity' && (optLower.includes('creat') || optLower.includes('design') || optLower.includes('build'))) score += 3;
-            if (valueLower === 'adventure' && (optLower.includes('new') || optLower.includes('change') || optLower.includes('explore'))) score += 3;
+            let impactScore = optionImpactScores?.[impactKey] || 5;
+            if (!optionImpactScores) {
+                if (normalizedName === 'security' && (optLower.includes('stable') || optLower.includes('safe') || optLower.includes('secure'))) impactScore += 2;
+                if (normalizedName === 'freedom' && (optLower.includes('free') || optLower.includes('independent') || optLower.includes('flexible'))) impactScore += 2;
+                if (normalizedName === 'growth' && (optLower.includes('learn') || optLower.includes('grow') || optLower.includes('develop'))) impactScore += 2;
+                if (normalizedName === 'creativity' && (optLower.includes('creat') || optLower.includes('design') || optLower.includes('build'))) impactScore += 2;
+                if (normalizedName === 'adventure' && (optLower.includes('new') || optLower.includes('change') || optLower.includes('explore'))) impactScore += 2;
+                const seed = hashString(option + valueName);
+                impactScore = Math.max(1, Math.min(10, impactScore + ((seed % 3) - 1)));
+            }
 
-            // Add deterministic variation
-            const seed = hashString(option + value);
-            score += (seed % 3) - 1;
+            weightedSum += impactScore * normalizedWeight;
+            totalWeight += normalizedWeight;
 
-            alignment[value] = {
-                score: Math.max(1, Math.min(10, score)),
-                weighted: Math.max(1, Math.min(10, score)) * (importance / 10)
+            const contribution = impactScore * normalizedWeight;
+            alignment[valueName] = {
+                score: impactScore,
+                weighted: contribution
             };
+
+            breakdown.push({
+                value: valueName,
+                weight: Number(valueWeight || 0),
+                impact: impactScore,
+                contribution
+            });
         });
 
-        const totalWeighted = Object.values(alignment).reduce((sum, v) => sum + v.weighted, 0);
-        const maxPossible = Object.values(values).reduce((sum, v) => sum + v, 0);
+        const alignmentScore = totalWeight > 0
+            ? Math.round((weightedSum / totalWeight) * 10)
+            : 50;
+        const percentage = Math.max(0, Math.min(100, alignmentScore));
 
         return {
-            option,
+            option: option || `Option ${index + 1}`,
             alignment,
-            totalScore: totalWeighted,
-            percentage: Math.round((totalWeighted / maxPossible) * 100)
+            alignmentScore: percentage,
+            totalScore: weightedSum,
+            percentage,
+            breakdown: breakdown
+                .sort((a, b) => b.contribution - a.contribution)
+                .map(item => ({
+                    ...item,
+                    contribution: Number(item.contribution.toFixed(1))
+                })),
+            summary: percentage >= 70
+                ? 'Strong alignment with your values'
+                : percentage >= 50
+                    ? 'Moderate alignment with your values'
+                    : 'May conflict with some of your values'
         };
     });
 }
@@ -781,44 +810,39 @@ export function analyzeEmotionalTemperature(emotionalScore) {
     if (emotionalScore >= 80) {
         return {
             level: 'critical',
-            label: '🔥 Emotionally Heated',
+            label: 'Emotionally Heated',
             advice: 'Your emotional intensity is very high. Research by Loewenstein (2005) shows that decisions made in "hot" emotional states are significantly more likely to be regretted. Consider implementing a 24-72 hour cooling period before committing.',
-            color: '#f43f5e',
             shouldDelay: true
         };
     }
     if (emotionalScore >= 60) {
         return {
             level: 'elevated',
-            label: '🌡️ Emotionally Elevated',
+            label: 'Emotionally Elevated',
             advice: 'You\'re somewhat emotionally activated. This isn\'t necessarily bad — emotions carry information. But double-check that your reasoning holds up independently of how you feel right now.',
-            color: '#f59e0b',
             shouldDelay: false
         };
     }
     if (emotionalScore >= 40) {
         return {
             level: 'balanced',
-            label: '⚖️ Balanced State',
+            label: 'Balanced State',
             advice: 'You appear to be in a balanced emotional state — neither too detached (which can lead to analysis paralysis) nor too heated (which can lead to impulsive choices). This is a good headspace for decision-making.',
-            color: '#34d399',
             shouldDelay: false
         };
     }
     if (emotionalScore >= 20) {
         return {
             level: 'cool',
-            label: '❄️ Cool & Analytical',
+            label: 'Cool & Analytical',
             advice: 'You\'re in a very analytical state. While clarity is valuable, ensure you\'re not suppressing important emotional signals. Damasio\'s Somatic Marker Hypothesis (1994) shows that emotions play a crucial role in good decision-making.',
-            color: '#2dd4bf',
             shouldDelay: false
         };
     }
     return {
         level: 'detached',
-        label: '🧊 Emotionally Detached',
+        label: 'Emotionally Detached',
         advice: 'You seem very detached. While objectivity is valuable, complete emotional disconnection can lead to decisions that look good on paper but feel wrong in practice. Try to reconnect with what you genuinely want.',
-        color: '#60a5fa',
         shouldDelay: false
     };
 }
@@ -831,7 +855,7 @@ export function runFullAnalysis(decisionText, options, answers, userValues, emot
     const category = categorizeDecision(decisionText);
     const stakes = assessStakes(decisionText);
     const biases = aiInsights?.biasesDetected
-        ? aiInsights.biasesDetected.map(b => ({ name: b.split('-')[0], description: b.split('-')[1] || b, icon: '⚠️' }))
+        ? aiInsights.biasesDetected.map(b => ({ name: b.split('-')[0], description: b.split('-')[1] || b }))
         : detectBiases(decisionText, answers);
 
     const impactScores = generateImpactScores(options, decisionText, answers);
@@ -842,7 +866,7 @@ export function runFullAnalysis(decisionText, options, answers, userValues, emot
     const preMortem = aiInsights?.preMortem || generatePreMortem(options, category.type);
 
     const opportunityCosts = generateOpportunityCosts(options, decisionText);
-    const valuesAlignment = calculateValuesAlignment(options, userValues);
+    const valuesAlignment = calculateValuesAlignment(options, impactScores, userValues);
     const assumptions = generateAssumptions(decisionText, answers, category.type);
     const recommendation = generateRecommendation(options, impactScores, valuesAlignment, biases);
     const emotionalAnalysis = analyzeEmotionalTemperature(emotionalScore || 50);

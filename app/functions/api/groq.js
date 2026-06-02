@@ -3,6 +3,7 @@ const RATE_LIMIT_MAX_REQUESTS = 30;
 const MAX_MESSAGES = 24;
 const MAX_MESSAGE_CHARS = 4000;
 const MAX_PROMPT_CHARS = 24000;
+const STREAM_ENABLED = true;
 
 const bucketStore = globalThis.__dmRateLimitBuckets || new Map();
 globalThis.__dmRateLimitBuckets = bucketStore;
@@ -103,6 +104,8 @@ export async function onRequestPost(context) {
     return json(400, { error: validationError });
   }
 
+  const wantsStream = payload?.stream === true;
+
   try {
     const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -110,8 +113,23 @@ export async function onRequestPost(context) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${serverKey}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, stream: wantsStream && STREAM_ENABLED })
     });
+
+    if (wantsStream && STREAM_ENABLED) {
+      if (!upstream.ok) {
+        const errorText = await upstream.text();
+        return json(upstream.status, { error: errorText || `Groq request failed (${upstream.status}).` });
+      }
+
+      const headers = new Headers(upstream.headers);
+      headers.set('Content-Type', 'text/event-stream');
+      headers.set('Cache-Control', 'no-cache');
+      return new Response(upstream.body, {
+        status: 200,
+        headers
+      });
+    }
 
     const responseText = await upstream.text();
     let parsed;

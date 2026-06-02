@@ -46,7 +46,8 @@ export default function ValuesSetup({ onNavigate }) {
                                     style={{
                                         width: '100%',
                                         height: '8px',
-                                        background: `linear-gradient(to right, var(--accent-vermilion) 0%, var(--accent-vermilion) ${(val - 1) * 11.111}%, var(--border-hairline) ${(val - 1) * 11.111}%, var(--border-hairline) 100%)`,
+                                        background: 'var(--border-hairline)',
+                                        accentColor: 'var(--accent-vermilion)',
                                         appearance: 'none',
                                         outline: 'none',
                                         cursor: 'pointer',
@@ -70,8 +71,7 @@ export default function ValuesSetup({ onNavigate }) {
                             textAlign: 'center',
                             fontFamily: 'var(--font-display)',
                             fontStyle: 'italic',
-                            color: 'var(--accent-vermilion)',
-                            animation: 'fadeInUp 0.4s var(--ease-editorial)'
+                            color: 'var(--accent-vermilion)'
                         }}
                     >
                         Values saved! Future decisions will be weighed against these priorities.

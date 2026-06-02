@@ -1,3 +1,7 @@
+import { motion } from 'framer-motion';
+
+const MotionDiv = motion.div;
+
 /**
  * EmptyState.jsx — Editorial empty state component
  * 
@@ -6,11 +10,13 @@
 
 export default function EmptyState({ message, actionLabel, onAction }) {
   return (
-    <div
+    <MotionDiv
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       style={{
         textAlign: 'center',
-        padding: 'var(--space-8) var(--space-6)',
-        animation: 'fadeInUp 0.5s var(--ease-editorial)'
+        padding: 'var(--space-8) var(--space-6)'
       }}
     >
       <p
@@ -30,6 +36,6 @@ export default function EmptyState({ message, actionLabel, onAction }) {
           {actionLabel}
         </button>
       )}
-    </div>
+    </MotionDiv>
   );
 }

@@ -22,6 +22,8 @@ import {
 import { generateDecisionPDF } from '../engine/pdfGenerator';
 import { CascadeItem } from '../components/Motion';
 import LoadingState from '../components/LoadingState';
+import { getUserValues } from '../engine/storage';
+import Sources from '../components/Sources';
 
 ChartJS.register(CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, RadialLinearScale, Tooltip);
 
@@ -220,8 +222,121 @@ export default function AnalysisView({ analysis, title, description, onNavigate 
         return <LoadingState stages={['Loading analysis...']} />;
     }
 
+    if (analysis?.quickMode) {
+        return (
+            <div className="analysis-view quick-analysis reveal visible">
+                <div className="panel verdict-card">
+                    <div className="verdict-badge">Quick Verdict</div>
+                    <h1 className="verdict-title">{analysis.verdict?.title}</h1>
+                    <p className="verdict-recommendation">{analysis.verdict?.recommendation}</p>
+
+                    <div className="quick-details">
+                        <div className="quick-detail">
+                            <strong>Key Consideration:</strong>
+                            <p>{analysis.keyConsideration}</p>
+                        </div>
+                        <div className="quick-detail">
+                            <strong>One Thing to Check:</strong>
+                            <p>{analysis.oneThingToCheck}</p>
+                        </div>
+                        <div className="quick-detail">
+                            <strong>Reversibility:</strong>
+                            <p>{analysis.verdict?.reversibility}</p>
+                        </div>
+                    </div>
+
+                    <div className="quick-analysis-actions">
+                        <button className="btn btn-ghost" onClick={() => onNavigate('dashboard')}>
+                            Done
+                        </button>
+                        <button className="btn btn-primary" onClick={() => onNavigate('new-decision')}>
+                            Get Deep Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (analysis?.compareMode) {
+        return (
+            <div className="analysis-view compare-analysis reveal visible">
+                <div className="panel compare-verdict">
+                    <div className="verdict-badge">Head-to-Head Result</div>
+                    <h1 className="verdict-title">{analysis.verdict?.title}</h1>
+                    <p className="verdict-recommendation">{analysis.verdict?.recommendation}</p>
+                </div>
+
+                <div className="compare-grid">
+                    <div className="compare-column option-a">
+                        <h2>{analysis.optionA?.name}</h2>
+                        <div className="compare-score">Score: {analysis.optionA?.score}/100</div>
+                        <div className="compare-pros">
+                            <h3>Pros</h3>
+                            <ul>
+                                {analysis.optionA?.pros?.map((pro, i) => <li key={`a-pro-${i}`}>{pro}</li>)}
+                            </ul>
+                        </div>
+                        <div className="compare-cons">
+                            <h3>Cons</h3>
+                            <ul>
+                                {analysis.optionA?.cons?.map((con, i) => <li key={`a-con-${i}`}>{con}</li>)}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="compare-column option-b">
+                        <h2>{analysis.optionB?.name}</h2>
+                        <div className="compare-score">Score: {analysis.optionB?.score}/100</div>
+                        <div className="compare-pros">
+                            <h3>Pros</h3>
+                            <ul>
+                                {analysis.optionB?.pros?.map((pro, i) => <li key={`b-pro-${i}`}>{pro}</li>)}
+                            </ul>
+                        </div>
+                        <div className="compare-cons">
+                            <h3>Cons</h3>
+                            <ul>
+                                {analysis.optionB?.cons?.map((con, i) => <li key={`b-con-${i}`}>{con}</li>)}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="panel compare-dimensions">
+                    <h3>Dimension Breakdown</h3>
+                    <div className="dimension-rows">
+                        {analysis.dimensions?.map((dim) => (
+                            <div key={dim.key} className="dimension-row">
+                                <span className="dim-label">{dim.label}</span>
+                                <div className="dim-bars">
+                                    <div className="dim-bar bar-a" style={{ width: `${dim.optionAScore * 10}%` }} />
+                                    <div className="dim-bar bar-b" style={{ width: `${dim.optionBScore * 10}%` }} />
+                                </div>
+                                <span className="dim-scores">{dim.optionAScore} vs {dim.optionBScore}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {analysis.tiebreaker && (
+                    <div className="panel tiebreaker">
+                        <h3>If It's Close</h3>
+                        <p>{analysis.tiebreaker}</p>
+                    </div>
+                )}
+
+                <div className="compare-actions">
+                    <button className="btn btn-ghost" onClick={() => onNavigate('dashboard')}>
+                        Done
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <article className="analysis-container" style={{ animation: 'fadeInUp 0.6s var(--ease-editorial)' }}>
+        <article className="analysis-container">
             {/* MASTHEAD — Verdict as editorial headline */}
             <CascadeItem delay={0}>
                 <header className="analysis-header">
@@ -255,6 +370,11 @@ export default function AnalysisView({ analysis, title, description, onNavigate 
                                 }}>
                                     Confidence: {analysis.verdict.confidence}
                                 </div>
+                            )}
+                            {analysis.verdict.confidenceExplanation && (
+                                <p className="confidence-explanation">
+                                    <strong>Confidence: {analysis.verdict.confidence}</strong> - {analysis.verdict.confidenceExplanation}
+                                </p>
                             )}
                         </>
                     )}
@@ -337,6 +457,48 @@ export default function AnalysisView({ analysis, title, description, onNavigate 
                         {analysis.coreConflict.explanation && (
                             <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, textAlign: 'center' }}>
                                 {analysis.coreConflict.explanation}
+                            </p>
+                        )}
+                    </section>
+                </CascadeItem>
+            )}
+
+            {analysis.valuesAlignment && analysis.valuesAlignment.length > 0 && (
+                <CascadeItem delay={0.35}>
+                    <section className="analysis-section values-alignment">
+                        <h3>Values Alignment</h3>
+                        <p className="section-intro">How each option aligns with your stated priorities</p>
+
+                        <div className="values-cards">
+                            {analysis.valuesAlignment.map((item, i) => (
+                                <div key={`values-${i}`} className="values-card panel">
+                                    <h3>{item.option}</h3>
+                                    <div className="alignment-score">
+                                        <span className="score-value">{item.alignmentScore || item.percentage}%</span>
+                                        <span className="score-label">{item.summary || 'Alignment estimate'}</span>
+                                    </div>
+
+                                    <div className="values-breakdown">
+                                        {(item.breakdown || []).slice(0, 5).map((b, j) => (
+                                            <div key={`breakdown-${j}`} className="breakdown-row">
+                                                <span className="breakdown-value">{b.value}</span>
+                                                <div className="breakdown-bar">
+                                                    <div className="breakdown-fill" style={{ width: `${(b.impact || 0) * 10}%` }} />
+                                                </div>
+                                                <span className="breakdown-weight">Priority: {b.weight}/10</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {!getUserValues() && (
+                            <p className="values-cta">
+                                <button className="link-btn" onClick={() => onNavigate('values')} type="button">
+                                    Set your values
+                                </button>{' '}
+                                to get personalized alignment scores.
                             </p>
                         )}
                     </section>
@@ -574,6 +736,10 @@ export default function AnalysisView({ analysis, title, description, onNavigate 
                     </section>
                 </CascadeItem>
             )}
+
+            <CascadeItem delay={1.15}>
+                <Sources analysis={analysis} />
+            </CascadeItem>
 
             {/* FOOTER ACTIONS */}
             <CascadeItem delay={1.2}>

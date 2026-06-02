@@ -1,4 +1,4 @@
-# MirrorWise — AI-Powered Decision Intelligence
+# Decision Mirror — AI-Powered Decision Intelligence
 
 ## The Problem
 
@@ -11,7 +11,7 @@ Existing tools are either:
 
 ## The Solution
 
-MirrorWise is a **hybrid decision intelligence system** that combines a deterministic decision science engine with AI-powered personalized analysis. It's not a chatbot — it's a structured psychological intervention.
+Decision Mirror is a **hybrid decision intelligence system** that combines a deterministic decision science engine with AI-powered personalized analysis. It's not a chatbot — it's a structured psychological intervention.
 
 ### How It Works (4-Step Flow)
 
@@ -22,7 +22,7 @@ MirrorWise is a **hybrid decision intelligence system** that combines a determin
 
 ### What Makes This Different From a Chatbot
 
-| Feature | Generic AI Chat | MirrorWise |
+| Feature | Generic AI Chat | Decision Mirror |
 |---------|----------------|-----------------|
 | Cognitive bias detection | No | Yes — with research citations |
 | Structured frameworks | No | 10-10-10, Pre-Mortem, Scenario Planning |
@@ -124,7 +124,7 @@ npm run lint && npm run test && npm run build
 
 ## Deployment
 
-MirrorWise can run as:
+Decision Mirror can run as:
 - **SPA + serverless API (recommended)** for zero user key friction
 - **Pure SPA** where users enter their own keys
 

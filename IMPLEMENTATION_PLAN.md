@@ -5,6 +5,38 @@
 
 ---
 
+## ⚠️ IMPORTANT: EDITORIAL REVIVAL COMPLETED
+
+**The design system has been completely transformed.** Before implementing features, understand these changes:
+
+### Completed Editorial Transformation (from PLAN (1).md)
+✅ **3-Color Palette**: Only #F4F1EA (Newsprint), #1A1714 (Ink), #C8412B (Vermilion) + derived opacities  
+✅ **2 Fonts**: Fraunces (display/headlines), Newsreader (body/UI) — loaded via Google Fonts  
+✅ **Zero Rounded Corners**: All `--radius-*` tokens set to 0. Borders are 1px hairlines  
+✅ **No Glassmorphism**: All backdrop-filter, blur, and glass effects removed  
+✅ **No Gradients**: Removed from text, backgrounds, and buttons  
+✅ **No Emoji UI Icons**: Replaced with lucide-react line icons  
+✅ **Editorial Components**: Motion.jsx, EmptyState.jsx, LoadingState.jsx created  
+✅ **Framer Motion**: All transitions use framer-motion with editorial easing  
+
+### Key Implementation Notes
+1. **CSS Variables**: All design tokens in `app/src/index.css` `:root` — use them
+2. **Legacy Classes**: `.glass-card` still exists in code but styled editorially. New features should use semantic markup with editorial styling
+3. **Typography**: Use Fraunces for headlines/verdicts, Newsreader for body/labels
+4. **Buttons**: `.btn`, `.btn-primary` (Vermilion), `.btn-ghost` (outlined)
+5. **Spacing**: Use `var(--space-*)` tokens (1-10 scale)
+6. **Colors**: Use `var(--text-ink)`, `var(--accent-vermilion)`, `var(--bg-newsprint)`, etc.
+7. **Motion**: Import from `components/Motion.jsx` for page transitions
+
+When implementing new features, **match the editorial aesthetic**:
+- Hairline borders (1px, `var(--border-hairline)`)
+- No rounded corners
+- Generous whitespace
+- Typographic hierarchy over colored boxes
+- Vermilion only for primary actions and key data
+
+---
+
 ## TABLE OF CONTENTS
 1. [FEATURE 1: Kill API Key Requirement (Server-Side Proxy)](#feature-1-kill-api-key-requirement)
 2. [FEATURE 2: Quick Decision Mode](#feature-2-quick-decision-mode)
@@ -19,14 +51,18 @@
 
 ## GLOBAL RULES (apply to every step)
 - This is a Vite + React 19 app. Do NOT use Next.js patterns.
-- The app uses plain CSS in `app/src/index.css` and `app/src/App.css`. No Tailwind.
+- **DESIGN SYSTEM**: The app uses an editorial/literary print aesthetic. Colors: #F4F1EA (Newsprint), #1A1714 (Ink), #C8412B (Vermilion). Fonts: Fraunces (display), Newsreader (body). NO rounded corners (radius: 0), NO glassmorphism, NO gradients.
+- The app uses plain CSS in `app/src/index.css`. NO Tailwind. CSS uses design tokens defined in `:root`.
+- **CSS CLASSES**: Use editorial classes (`.panel`, `.btn`, `.btn-primary`, `.btn-ghost`, etc.). The legacy `.glass-card` class still exists but should be replaced with semantic editorial markup in new features.
 - All AI logic lives in `app/src/engine/aiService.js`. Storage is in `app/src/engine/storage.js`.
 - Two server proxy stubs already exist: `app/api/groq.js` (Vercel) and `app/functions/api/groq.js` (Cloudflare Pages). Both are functional.
 - User values are stored via `getUserValues()` / `saveUserValues()` from `app/src/engine/storage.js`.
 - Decisions are stored via `saveDecision()` / `getDecisions()` / `getDecision()` / `updateDecision()`.
 - The app uses a simple `onNavigate(page, data)` pattern for routing passed from `App.jsx`.
-- Brand name is "Decision Mirror" (not "MirrorWise"). Unify all references.
-- Do NOT add any new dependencies unless explicitly specified. Use existing patterns.
+- Brand name is "Decision Mirror" everywhere. Unified in editorial revival.
+- **EXISTING COMPONENTS**: `Motion.jsx`, `EmptyState.jsx`, `LoadingState.jsx`, `SettingsModal.jsx` already exist. Use them.
+- **ICONS**: Use lucide-react for all UI icons. NO emojis in UI (emojis OK in user content only).
+- Do NOT add any new dependencies unless explicitly specified. framer-motion and lucide-react are already installed.
 - After completing each feature, verify: no console errors, no lint errors, feature works end-to-end.
 
 ---
@@ -91,26 +127,43 @@ const aiMode = getAIAccessMode();
 )}
 ```
 
-#### Step 1.3: Remove the "no API key" blocking state in NewDecision
+#### Step 1.3: Update the "no API key" messaging in NewDecision
 File: `app/src/pages/NewDecision.jsx`
 
-The `apiReady` state and its checks are no longer needed when server mode is default. However, keep the check as a safety net but remove the hard block.
+The `apiReady` state check is already implemented. When server mode is default, the UI won't show API key prompts for most users.
 
-Find where `apiReady` is used to disable or block the UI. The check `if (!isAIAvailable()) return;` in `handleCheckinComplete` should remain as a safety check, but the UI should not show a "please configure API key" message.
+Find the JSX block that shows the API key setup prompt (around line 531):
 
-Find any JSX that renders a message like "API key required" or "Please add your Groq API key" and either:
-- Remove it entirely, OR
-- Wrap it in `{!isAIAvailable() && aiMode === 'client' && ( ... )}` where `aiMode` is obtained from `getAIAccessMode()`.
+```javascript
+{!apiReady && (
+    <div className="setup-prompt glass-card" style={{...
+```
 
-Add at the top of `NewDecision.jsx`:
+Update it to check the AI mode:
+
 ```javascript
 import { getAIAccessMode } from '../engine/aiService';
+
+// Inside component:
+const aiMode = getAIAccessMode();
+
+// In JSX:
+{!apiReady && aiMode === 'client' && (
+    <div className="setup-prompt" style={{
+        marginTop: var(--space-5)',
+        background: 'var(--bg-hover-wash)',
+        border: '1px solid var(--border-hairline)',
+        padding: 'var(--space-5)'
+    }}>
+        <p style={{ color: 'var(--accent-vermilion)', fontSize: '0.95rem', marginBottom: 'var(--space-3)', fontWeight: 600 }}>
+            Add your free Groq API key to get started
+        </p>
+        {/* rest of the prompt... */}
+    </div>
+)}
 ```
 
-And inside the component:
-```javascript
-const aiMode = getAIAccessMode();
-```
+Note: The class should use editorial styling, not `.glass-card`.
 
 #### Step 1.4: Ensure the proxy works
 The proxy files already exist and are functional:
@@ -393,25 +446,32 @@ if (currentPage === 'quick') {
 #### Step 2.4: Add Quick Decision entry point on Landing page
 File: `app/src/pages/Landing.jsx`
 
-Find the hero section where the main CTA button is (e.g., "Start Decision" or "Analyze a Decision"). Add a secondary button for Quick Decision:
+Find the hero section where the main CTA buttons are. The current buttons are:
+- "Analyze a Decision" → should become "Deep Analysis"  
+- "See the Science" → keep as is
+
+Add a "Quick Verdict" button:
 
 ```javascript
-<div className="hero-actions">
-    <button className="btn btn-primary" onClick={() => onNavigate('new')}>
+<div style={{ display: 'flex', gap: 'var(--space-4)', justifyContent: 'center', flexWrap: 'wrap' }}>
+    <button className="btn btn-primary btn-lg" onClick={() => onNavigate('new-decision')}>
         Deep Analysis
     </button>
-    <button className="btn btn-secondary" onClick={() => onNavigate('quick')}>
+    <button className="btn btn-primary btn-lg" onClick={() => onNavigate('quick')}>
         Quick Verdict
+    </button>
+    <button className="btn btn-ghost btn-lg" onClick={() => document.getElementById('science').scrollIntoView({ behavior: 'smooth' })}>
+        See the Science
     </button>
 </div>
 ```
 
-Adjust the existing button text from "Start Decision" to "Deep Analysis" to differentiate.
+Note: The current routing uses 'new-decision' not 'new'.
 
 #### Step 2.5: Add CSS for QuickDecision
 File: `app/src/index.css`
 
-Add at the end of the file:
+Add at the end of the file (using editorial design tokens):
 
 ```css
 /* ============================================
@@ -421,54 +481,71 @@ Add at the end of the file:
 .quick-decision {
     max-width: 600px;
     margin: 0 auto;
-    padding: 2rem 1rem;
+    padding: var(--space-7) var(--space-6);
 }
 
 .quick-header {
     text-align: center;
-    margin-bottom: 2rem;
+    margin-bottom: var(--space-7);
 }
 
 .quick-header h1 {
+    font-family: var(--font-display);
     font-size: clamp(1.75rem, 4vw, 2.5rem);
-    margin-bottom: 0.5rem;
+    font-weight: 300;
+    margin-bottom: var(--space-3);
 }
 
 .quick-card {
-    padding: 2rem;
+    padding: var(--space-6);
+    border: 1px solid var(--border-hairline);
+    background: var(--bg-newsprint);
 }
 
 .quick-card .decision-textarea {
     min-height: 120px;
-    font-size: 1.1rem;
+    font-size: 1.0625rem;
+    font-family: var(--font-body);
+    border: none;
+    border-bottom: 1px solid var(--border-hairline);
+    background: var(--bg-newsprint);
+    color: var(--text-ink);
+    width: 100%;
+    padding: var(--space-4);
+}
+
+.quick-card .decision-textarea:focus {
+    outline: none;
+    border-bottom-color: var(--accent-vermilion);
 }
 
 .quick-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 1rem;
-    margin-top: 1.5rem;
+    gap: var(--space-4);
+    margin-top: var(--space-5);
 }
 
 .quick-hint {
     text-align: center;
-    margin-top: 1.5rem;
+    margin-top: var(--space-5);
     font-size: 0.875rem;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
 }
 
 .link-btn {
     background: none;
     border: none;
-    color: var(--accent);
+    color: var(--accent-vermilion);
     text-decoration: underline;
     cursor: pointer;
     font-size: inherit;
     padding: 0;
+    font-family: var(--font-body);
 }
 
 .link-btn:hover {
-    color: var(--accent-hover);
+    opacity: 0.8;
 }
 ```
 
