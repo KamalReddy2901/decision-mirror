@@ -1,8 +1,8 @@
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 30;
 const MAX_MESSAGES = 24;
-const MAX_MESSAGE_CHARS = 4000;
-const MAX_PROMPT_CHARS = 24000;
+const MAX_MESSAGE_CHARS = 12000; // Increased from 4000 to support long analysis prompts
+const MAX_PROMPT_CHARS = 32000; // Increased from 24000
 const STREAM_ENABLED = true;
 
 const requestBuckets = new Map();
