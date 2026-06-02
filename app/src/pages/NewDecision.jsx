@@ -1,5 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
+import { AlertCircle } from 'lucide-react';
 import {
     isAIAvailable,
     generateNextQuestion,
@@ -8,16 +9,16 @@ import {
 } from '../engine/aiService';
 import { saveDecision, getUserValues } from '../engine/storage';
 import { runFullAnalysis } from '../engine/decisionEngine';
-import AnimatedBackground from '../components/AnimatedBackground';
+import LoadingState from '../components/LoadingState';
 
 const MAX_QUESTIONS = 5;
 
 const EMOTION_LABELS = [
-    { min: 0, max: 15, label: 'Detached', emoji: '🧊', desc: 'Very analytical, almost disconnected' },
-    { min: 16, max: 35, label: 'Calm', emoji: '🌊', desc: 'Clear-headed, good headspace for decisions' },
-    { min: 36, max: 55, label: 'Engaged', emoji: '⚖️', desc: 'Balanced — emotions informing, not controlling' },
-    { min: 56, max: 75, label: 'Stirred', emoji: '🌡️', desc: 'Emotions are active — proceed thoughtfully' },
-    { min: 76, max: 100, label: 'Heated', emoji: '🔥', desc: 'Strong emotions in play — consider waiting' },
+    { min: 0, max: 15, label: 'Detached', desc: 'Very analytical, almost disconnected' },
+    { min: 16, max: 35, label: 'Calm', desc: 'Clear-headed, good headspace for decisions' },
+    { min: 36, max: 55, label: 'Engaged', desc: 'Balanced — emotions informing, not controlling' },
+    { min: 56, max: 75, label: 'Stirred', desc: 'Emotions are active — proceed thoughtfully' },
+    { min: 76, max: 100, label: 'Heated', desc: 'Strong emotions in play — consider waiting' },
 ];
 
 function getEmotionLabel(score) {
@@ -498,9 +499,8 @@ export default function NewDecision({ onNavigate }) {
     const renderDescribe = () => (
         <div className="decision-flow">
             {renderStepIndicator()}
-            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-out)' }}>
+            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-editorial)' }}>
                 <div className="describe-header">
-                    <div className="describe-icon">🪞</div>
                     <h2>What's weighing on your mind?</h2>
                     <p className="subtitle">
                         Describe your situation naturally. The more honest and detailed you are,
@@ -519,6 +519,7 @@ export default function NewDecision({ onNavigate }) {
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && e.metaKey) handleDescribeNext();
                         }}
+                        aria-label="Describe your decision"
                     />
                     <div className="char-counter" style={{ marginTop: '0.5rem' }}>
                         {description.length > 0 && `${description.length} / 3,000`}
@@ -528,15 +529,15 @@ export default function NewDecision({ onNavigate }) {
                 {!apiReady && (
                     <div className="setup-prompt glass-card" style={{
                         marginTop: '1.5rem',
-                        background: 'rgba(251, 191, 36, 0.08)',
-                        border: '1px solid rgba(251, 191, 36, 0.2)',
+                        background: 'var(--bg-hover-wash)',
+                        border: '1px solid var(--border-hairline)',
                         padding: '1.25rem'
                     }}>
-                        <p style={{ color: '#fbbf24', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
-                            🔑 Add your free Groq API key to get started
+                        <p style={{ color: 'var(--accent-vermilion)', fontSize: '0.95rem', marginBottom: '0.75rem', fontWeight: 600 }}>
+                            Add your free Groq API key to get started
                         </p>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1rem' }}>
-                            MirrorWise uses <strong>Groq + Llama 3</strong> for lightning-fast, psychology-grounded analysis.
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1rem', lineHeight: 1.6 }}>
+                            Decision Mirror uses Groq + Llama 3 for lightning-fast, psychology-grounded analysis.
                             Get a free key in 10 seconds.
                         </p>
                         <button
@@ -582,9 +583,8 @@ export default function NewDecision({ onNavigate }) {
     const renderCheckin = () => (
         <div className="decision-flow">
             {renderStepIndicator()}
-            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-out)' }}>
+            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-editorial)' }}>
                 <div className="describe-header">
-                    <div className="describe-icon" style={{ fontSize: '2.5rem' }}>{currentEmotionLabel.emoji}</div>
                     <h2>Before we analyze — how are you feeling?</h2>
                     <p className="subtitle">
                         Research shows that simply naming your emotional state reduces its influence
@@ -616,6 +616,7 @@ export default function NewDecision({ onNavigate }) {
                                 cursor: 'pointer',
                                 zIndex: 2
                             }}
+                            aria-label="Emotional intensity scale"
                         />
                     </div>
                     <div className="gauge-labels">
@@ -628,14 +629,13 @@ export default function NewDecision({ onNavigate }) {
                     textAlign: 'center',
                     padding: '1.5rem',
                     margin: '1.5rem 0',
-                    background: `${emotionalScore > 70 ? 'rgba(244, 63, 94, 0.08)' : emotionalScore > 40 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(52, 211, 153, 0.08)'}`,
-                    border: `1px solid ${emotionalScore > 70 ? 'rgba(244, 63, 94, 0.2)' : emotionalScore > 40 ? 'rgba(99, 102, 241, 0.2)' : 'rgba(52, 211, 153, 0.2)'}`,
+                    background: 'var(--bg-newsprint)',
+                    border: emotionalScore > 70 ? '2px solid var(--accent-vermilion)' : '1px solid var(--border-hairline)',
                 }}>
-                    <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{currentEmotionLabel.emoji}</div>
-                    <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '0.25rem' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1.125rem', marginBottom: '0.5rem', color: emotionalScore > 70 ? 'var(--accent-vermilion)' : 'var(--text-ink)' }}>
                         {currentEmotionLabel.label}
                     </div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>
                         {currentEmotionLabel.desc}
                     </div>
                 </div>
@@ -643,30 +643,20 @@ export default function NewDecision({ onNavigate }) {
                 {emotionalScore > 75 && (
                     <div className="glass-card" style={{
                         padding: '1rem 1.25rem',
-                        background: 'rgba(244, 63, 94, 0.06)',
-                        border: '1px solid rgba(244, 63, 94, 0.15)',
+                        background: 'var(--bg-hover-wash)',
+                        border: '2px solid var(--accent-vermilion)',
                         fontSize: '0.875rem',
                         color: 'var(--text-secondary)',
                         lineHeight: 1.6
                     }}>
-                        <strong style={{ color: '#f43f5e' }}>Gentle warning:</strong> Research by Loewenstein (2005) shows
+                        <strong style={{ color: 'var(--accent-vermilion)' }}>Gentle warning:</strong> Research by Loewenstein (2005) shows
                         decisions made in "hot" emotional states are significantly more likely to be regretted.
                         We'll factor this into your analysis — but consider revisiting your decision after 24 hours.
                     </div>
                 )}
 
                 {isThinking && (
-                    <div className="glass-card" style={{
-                        textAlign: 'center', padding: '1.5rem', margin: '1rem 0',
-                        background: 'rgba(99, 102, 241, 0.06)',
-                        border: '1px solid rgba(99, 102, 241, 0.15)',
-                        animation: 'fadeInUp 0.4s var(--ease-out)'
-                    }}>
-                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🪞</div>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                            Preparing your first exploration question...
-                        </p>
-                    </div>
+                    <LoadingState stages={['Preparing your first exploration question...']} />
                 )}
 
                 <div className="question-actions" style={{ marginTop: '2rem' }}>
@@ -698,39 +688,43 @@ export default function NewDecision({ onNavigate }) {
 
                 {/* Context + emotional state reminder */}
                 <div className="context-reminder glass-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <div className="context-label">Your situation</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
-                            {currentEmotionLabel.emoji} {currentEmotionLabel.label}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', paddingBottom: 'var(--space-3)', borderBottom: '1px solid var(--border-hairline)' }}>
+                        <div className="eyebrow">Your situation</div>
+                        <div style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
+                            {currentEmotionLabel.label}
                         </div>
                     </div>
-                    <p>{description.length > 200 ? description.slice(0, 200) + '...' : description}</p>
+                    <p style={{ fontSize: '0.9375rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                        {description.length > 200 ? description.slice(0, 200) + '...' : description}
+                    </p>
                 </div>
 
                 {/* Question progress */}
                 <div style={{
                     textAlign: 'center',
-                    padding: '0.75rem 0',
-                    fontSize: '0.8rem',
+                    padding: 'var(--space-3) 0',
+                    fontSize: '0.8125rem',
                     color: 'var(--text-tertiary)',
-                    fontFamily: 'var(--font-mono)'
+                    fontFamily: 'var(--font-body)',
+                    letterSpacing: '0.05em'
                 }}>
-                    Exploration {questionNum}
+                    EXPLORATION {questionNum}
                 </div>
 
                 {error && (
                     <div className="glass-card" style={{
-                        padding: '1rem', background: 'rgba(244, 63, 94, 0.08)',
-                        border: '1px solid rgba(244, 63, 94, 0.2)', marginBottom: '1rem',
-                        fontSize: '0.9rem', color: '#f43f5e'
+                        padding: 'var(--space-5)', 
+                        border: '2px solid var(--accent-vermilion)', 
+                        marginBottom: 'var(--space-5)',
+                        fontSize: '0.9rem'
                     }}>
-                        <p style={{ marginBottom: '0.75rem' }}>{error}</p>
+                        <p style={{ marginBottom: 'var(--space-4)', color: 'var(--accent-vermilion)', fontWeight: 600 }}>{error}</p>
                         {isRetryCooldownActive && (
-                            <p style={{ marginBottom: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                            <p style={{ marginBottom: 'var(--space-4)', color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.6 }}>
                                 Cooling down to avoid repeated rate-limit failures. Retry unlocks in {retryCooldownSeconds}s.
                             </p>
                         )}
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                             <button
                                 className="btn btn-primary btn-sm"
                                 onClick={() => { setError(null); handleSkipToAnalysis(); }}
@@ -748,35 +742,32 @@ export default function NewDecision({ onNavigate }) {
                 {/* Conversation history */}
                 <div className="conversation-thread">
                     {chatHistory.map((msg, i) => (
-                        <div key={i} className="exchange-pair" style={{ animationDelay: '0s' }}>
-                            <div className="msg msg-ai">
-                                <div className="msg-avatar">🪞</div>
-                                <div className="msg-content">{msg.question}</div>
+                        <div key={i} className="exchange-pair" style={{ animationDelay: '0s', marginBottom: 'var(--space-6)' }}>
+                            <div className="msg msg-ai" style={{ marginBottom: 'var(--space-3)' }}>
+                                <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: '1.0625rem', lineHeight: 1.6, color: 'var(--text-ink)' }}>
+                                    {msg.question}
+                                </div>
                             </div>
-                            <div className="msg msg-user">
-                                <div className="msg-content">{msg.answer}</div>
+                            <div className="msg msg-user" style={{ paddingLeft: 'var(--space-5)', borderLeft: '2px solid var(--border-hairline)' }}>
+                                <div style={{ fontSize: '0.9375rem', lineHeight: 1.7, color: 'var(--text-secondary)' }}>
+                                    {msg.answer}
+                                </div>
                             </div>
                         </div>
                     ))}
 
                     {currentQuestion && !isThinking && (
-                        <div className="exchange-pair current-exchange" style={{ animation: 'fadeInUp 0.5s var(--ease-out)' }}>
+                        <div className="exchange-pair current-exchange" style={{ animation: 'fadeInUp 0.5s var(--ease-editorial)', marginBottom: 'var(--space-5)' }}>
                             <div className="msg msg-ai">
-                                <div className="msg-avatar">🪞</div>
-                                <div className="msg-content">{currentQuestion}</div>
+                                <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: '1.0625rem', lineHeight: 1.6, color: 'var(--text-ink)' }}>
+                                    {currentQuestion}
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {isThinking && (
-                        <div className="msg msg-ai thinking" style={{ animation: 'fadeInUp 0.3s var(--ease-out)' }}>
-                            <div className="msg-avatar">🪞</div>
-                            <div className="msg-content">
-                                <span className="thinking-dots">
-                                    <span>.</span><span>.</span><span>.</span>
-                                </span>
-                            </div>
-                        </div>
+                        <LoadingState stages={['Considering your response...']} />
                     )}
 
                     <div ref={chatEndRef} />
@@ -784,7 +775,7 @@ export default function NewDecision({ onNavigate }) {
 
                 {/* Answer input */}
                 {currentQuestion && !isThinking && (
-                    <div className="answer-area glass-card" style={{ animation: 'fadeInUp 0.5s var(--ease-out) 0.2s backwards' }}>
+                    <div className="answer-area glass-card" style={{ animation: 'fadeInUp 0.5s var(--ease-editorial) 0.2s backwards' }}>
                         <textarea
                             ref={answerRef}
                             className="text-area"
@@ -798,8 +789,9 @@ export default function NewDecision({ onNavigate }) {
                                     handleSubmitAnswer();
                                 }
                             }}
+                            aria-label="Your answer"
                         />
-                        <div className="answer-actions">
+                        <div className="answer-actions" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-4)', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                             <button
                                 className="btn btn-ghost btn-sm"
                                 onClick={handleSkipToAnalysis}
@@ -811,7 +803,7 @@ export default function NewDecision({ onNavigate }) {
                                 onClick={handleSubmitAnswer}
                                 disabled={!currentAnswer.trim() || isThinking}
                             >
-                                Reply ↵
+                                Reply
                             </button>
                         </div>
                     </div>
@@ -828,19 +820,21 @@ export default function NewDecision({ onNavigate }) {
             {renderStepIndicator()}
             {error ? (
                 <div style={{ maxWidth: '500px', margin: '2rem auto', textAlign: 'center' }}>
-                    <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⚠️</div>
+                    <div style={{ marginBottom: 'var(--space-5)' }}>
+                        <AlertCircle size={48} color="var(--accent-vermilion)" />
+                    </div>
                     <div className="glass-card" style={{
-                        padding: '1.5rem', background: 'rgba(244, 63, 94, 0.08)',
-                        border: '1px solid rgba(244, 63, 94, 0.2)',
+                        padding: '1.5rem', 
+                        border: '2px solid var(--accent-vermilion)',
                     }}>
-                        <p style={{ color: '#f43f5e', fontSize: '0.95rem', marginBottom: '1rem' }}>{error}</p>
-                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                        <p style={{ color: 'var(--accent-vermilion)', fontSize: '0.95rem', marginBottom: '1rem', fontWeight: 600 }}>{error}</p>
+                        <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', flexWrap: 'wrap' }}>
                             <button
                                 className="btn btn-primary"
                                 onClick={() => { setError(null); performAnalysis(chatHistory); }}
                                 disabled={isRetryCooldownActive}
                             >
-                                {isRetryCooldownActive ? `🔄 Retry in ${retryCooldownSeconds}s` : '🔄 Retry Analysis'}
+                                {isRetryCooldownActive ? `Retry in ${retryCooldownSeconds}s` : 'Retry Analysis'}
                             </button>
                             <button className="btn btn-ghost" onClick={() => { setError(null); setPhase('discuss'); }}>
                                 ← Back to Exploration
@@ -849,34 +843,13 @@ export default function NewDecision({ onNavigate }) {
                     </div>
                 </div>
             ) : (
-                <>
-                    <div className="analyzing-visual">
-                        <div className="analyzing-rings">
-                            <div className="ring ring-1" />
-                            <div className="ring ring-2" />
-                            <div className="ring ring-3" />
-                            <div className="ring-center">🪞</div>
-                        </div>
-                    </div>
-                    <h2 className="analyzing-title">Building Your MirrorWise</h2>
-                    <p className="analyzing-stage">{analyzeStage}</p>
-                    <div className="progress-track">
-                        <div
-                            className="progress-fill"
-                            style={{ width: `${analyzeProgress}%` }}
-                        />
-                    </div>
-                    <p className="analyzing-hint">
-                        Running {emotionalScore > 60 ? '7' : '6'} psychology frameworks against your situation...
-                    </p>
-                </>
+                <LoadingState currentStage={analyzeStage} />
             )}
         </div>
     );
 
     return (
         <>
-            <AnimatedBackground emotionalScore={phase === 'analyzing' ? 70 : phase === 'checkin' ? emotionalScore : 50} />
             {phase === 'describe' && renderDescribe()}
             {phase === 'checkin' && renderCheckin()}
             {phase === 'discuss' && renderDiscuss()}

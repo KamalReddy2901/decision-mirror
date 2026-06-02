@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import { Settings, Menu, X } from 'lucide-react';
 import Landing from './pages/Landing';
 import NewDecision from './pages/NewDecision';
 const AnalysisView = lazy(() => import('./pages/AnalysisView'));
@@ -6,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import DecisionDetail from './pages/DecisionDetail';
 import ValuesSetup from './pages/ValuesSetup';
 import SettingsModal from './components/SettingsModal';
+import LoadingState from './components/LoadingState';
 import { loadSavedAPIKey } from './engine/aiService';
 
 function getInitialSharedAnalysis() {
@@ -38,12 +40,11 @@ class AppErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center', background: 'var(--bg-primary, #0f0a1f)', color: 'var(--text-primary, #e8e8f0)' }}>
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', textAlign: 'center', background: 'var(--bg-newsprint)', color: 'var(--text-ink)' }}>
           <div>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🪞</div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.75rem' }}>Something went wrong</h1>
-            <p style={{ color: 'var(--text-secondary, #a0a0b8)', marginBottom: '1.5rem', maxWidth: '400px' }}>An unexpected error occurred. Your saved decisions are safe in local storage.</p>
-            <button onClick={() => { this.setState({ hasError: false }); window.location.hash = ''; }} style={{ padding: '0.75rem 1.5rem', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>Go Home</button>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 400, marginBottom: '0.75rem' }}>Something went wrong</h1>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', maxWidth: '400px' }}>An unexpected error occurred. Your saved decisions are safe in local storage.</p>
+            <button onClick={() => { this.setState({ hasError: false }); window.location.hash = ''; }} className="btn btn-primary">Go Home</button>
           </div>
         </div>
       );
@@ -89,12 +90,13 @@ export default function App() {
         const analysisDesc = currentAnalysis?.description;
 
         return (
-          <Suspense fallback={<div className="loading" style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)' }}>Loading analysis…</div>}>
+          <Suspense fallback={<LoadingState stages={['Loading analysis...']} />}>
             <AnalysisView
               analysis={analysisData}
               title={analysisTitle}
               description={analysisDesc}
               onNavigate={navigate}
+              onOpenSettings={() => setShowSettings(true)}
             />
           </Suspense>
         );
@@ -116,8 +118,7 @@ export default function App() {
         <header className="app-header">
           <div className="header-inner">
             <button className="logo" onClick={() => navigate('landing')} aria-label="Go to home page">
-              <div className="logo-icon" />
-              <span className="logo-text">MirrorWise</span>
+              <span className="logo-text">DECISION MIRROR</span>
             </button>
             <nav>
               <ul className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
@@ -152,7 +153,7 @@ export default function App() {
                     title="Settings"
                     aria-label="Open settings"
                   >
-                    ⚙️
+                    <Settings size={18} />
                   </button>
                 </li>
               </ul>
@@ -163,7 +164,7 @@ export default function App() {
               aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={mobileMenuOpen}
             >
-              {mobileMenuOpen ? '✕' : '☰'}
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </header>
