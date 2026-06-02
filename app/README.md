@@ -134,6 +134,32 @@ Decision Mirror can run as:
 npm run build
 ```
 
+### API Key Rotation (NEW)
+
+For high-traffic deployments, you can configure multiple API keys that automatically rotate when one hits rate limits:
+
+**Single Key (backward compatible)**:
+```bash
+GROQ_API_KEY=gsk_your_key_here
+```
+
+**Multiple Keys (recommended for production)**:
+```bash
+GROQ_API_KEYS=gsk_key1,gsk_key2,gsk_key3
+```
+
+**How It Works**:
+- When one key returns a 429 (rate limit) error, the system automatically switches to the next available key
+- Each exhausted key enters a 65-second cooldown period before being retried
+- Provides seamless failover with zero downtime for users
+- Supports mixing free and paid tier keys for cost optimization
+
+**Benefits**:
+- ✅ No service interruptions during rate limit periods
+- ✅ Higher aggregate throughput across multiple keys
+- ✅ Automatic recovery after cooldown periods
+- ✅ Works with both streaming and non-streaming responses
+
 ### Hosting Notes
 
 - Ensure SPA fallback/rewrite to `index.html` for client-side routing.
@@ -155,6 +181,7 @@ Configure your Cloudflare Pages project:
 
 2. **Environment variables**
    - `GROQ_API_KEY` = your secret Groq key (**server-side secret**, never exposed to users)
+   - OR `GROQ_API_KEYS` = comma-separated list of API keys for automatic rotation (recommended for high-traffic deployments)
    - `VITE_AI_MODE` = `server`
    - `VITE_AI_PROXY_PATH` = `/api/groq`
 
@@ -173,7 +200,7 @@ This repo already includes:
 - `vercel.json` (SPA routing + API path handling)
 
 Set env vars in Vercel project:
-- `GROQ_API_KEY` (server secret)
+- `GROQ_API_KEY` (server secret) OR `GROQ_API_KEYS` (comma-separated for key rotation)
 - `VITE_AI_MODE=server`
 - `VITE_AI_PROXY_PATH=/api/groq`
 

@@ -8,6 +8,11 @@ const STREAM_ENABLED = true;
 const bucketStore = globalThis.__dmRateLimitBuckets || new Map();
 globalThis.__dmRateLimitBuckets = bucketStore;
 
+// API Key rotation - tracks exhausted keys with cooldown
+const exhaustedKeys = globalThis.__dmExhaustedKeys || new Map();
+globalThis.__dmExhaustedKeys = exhaustedKeys;
+const KEY_COOLDOWN_MS = 65000; // 65 seconds cooldown
+
 function json(status, payload, headers = {}) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -78,12 +83,40 @@ function validatePayload(payload) {
   return null;
 }
 
+// Get the next available API key (not exhausted or cooldown expired)
+function getActiveKey(keys) {
+  const now = Date.now();
+  for (const key of keys) {
+    const exhaustedAt = exhaustedKeys.get(key);
+    if (!exhaustedAt || now - exhaustedAt > KEY_COOLDOWN_MS) {
+      exhaustedKeys.delete(key);
+      return key;
+    }
+  }
+  return null;
+}
+
+// Mark a key as exhausted (usually after 429 rate limit)
+function rotateKey(keys, usedKey) {
+  exhaustedKeys.set(usedKey, Date.now());
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const serverKey = String(env?.GROQ_API_KEY || '').trim();
-  if (!serverKey) {
-    return json(500, { error: 'Server is not configured with GROQ_API_KEY.' });
+  // Support both single key (GROQ_API_KEY) and multiple keys (GROQ_API_KEYS)
+  const singleKey = String(env?.GROQ_API_KEY || '').trim();
+  const multipleKeys = String(env?.GROQ_API_KEYS || '').trim();
+  
+  let keys = [];
+  if (multipleKeys) {
+    keys = multipleKeys.split(',').map(k => k.trim()).filter(k => k.length > 0);
+  } else if (singleKey) {
+    keys = [singleKey];
+  }
+  
+  if (keys.length === 0) {
+    return json(500, { error: 'Server is not configured with GROQ_API_KEY or GROQ_API_KEYS.' });
   }
 
   const ip = getClientIp(request);
@@ -106,52 +139,79 @@ export async function onRequestPost(context) {
 
   const wantsStream = payload?.stream === true;
 
-  try {
-    const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${serverKey}`
-      },
-      body: JSON.stringify({ ...payload, stream: wantsStream && STREAM_ENABLED })
-    });
-
-    if (wantsStream && STREAM_ENABLED) {
-      if (!upstream.ok) {
-        const errorText = await upstream.text();
-        return json(upstream.status, { error: errorText || `Groq request failed (${upstream.status}).` });
-      }
-
-      const headers = new Headers(upstream.headers);
-      headers.set('Content-Type', 'text/event-stream');
-      headers.set('Cache-Control', 'no-cache');
-      return new Response(upstream.body, {
-        status: 200,
-        headers
+  // Try each available key until one succeeds
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const key = getActiveKey(keys);
+    if (!key) {
+      // All keys are exhausted
+      return json(503, { 
+        error: 'All AI servers are busy right now. Please wait a moment and try again.' 
       });
     }
 
-    const responseText = await upstream.text();
-    let parsed;
     try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      parsed = { error: responseText || `Groq returned status ${upstream.status}` };
+      const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`
+        },
+        body: JSON.stringify({ ...payload, stream: wantsStream && STREAM_ENABLED })
+      });
+
+      // If rate limited, rotate to next key and try again
+      if (upstream.status === 429) {
+        rotateKey(keys, key);
+        continue;
+      }
+
+      if (wantsStream && STREAM_ENABLED) {
+        if (!upstream.ok) {
+          const errorText = await upstream.text();
+          return json(upstream.status, { error: errorText || `Groq request failed (${upstream.status}).` });
+        }
+
+        const headers = new Headers(upstream.headers);
+        headers.set('Content-Type', 'text/event-stream');
+        headers.set('Cache-Control', 'no-cache');
+        return new Response(upstream.body, {
+          status: 200,
+          headers
+        });
+      }
+
+      const responseText = await upstream.text();
+      let parsed;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        parsed = { error: responseText || `Groq returned status ${upstream.status}` };
+      }
+
+      const retryHeader = upstream.headers.get('Retry-After') || upstream.headers.get('retry-after');
+      const responseHeaders = retryHeader ? { 'Retry-After': retryHeader } : {};
+
+      if (!upstream.ok) {
+        const detail = parsed?.error?.message || parsed?.error || `Groq request failed (${upstream.status}).`;
+        return json(upstream.status, { error: detail }, responseHeaders);
+      }
+
+      return json(200, parsed, responseHeaders);
+    } catch (error) {
+      // On network errors, try next key if available
+      if (attempt < keys.length - 1) {
+        rotateKey(keys, key);
+        continue;
+      }
+      return json(502, {
+        error: 'Upstream AI request failed. Please try again in a moment.',
+        detail: String(error?.message || error)
+      });
     }
-
-    const retryHeader = upstream.headers.get('Retry-After') || upstream.headers.get('retry-after');
-    const responseHeaders = retryHeader ? { 'Retry-After': retryHeader } : {};
-
-    if (!upstream.ok) {
-      const detail = parsed?.error?.message || parsed?.error || `Groq request failed (${upstream.status}).`;
-      return json(upstream.status, { error: detail }, responseHeaders);
-    }
-
-    return json(200, parsed, responseHeaders);
-  } catch (error) {
-    return json(502, {
-      error: 'Upstream AI request failed. Please try again in a moment.',
-      detail: String(error?.message || error)
-    });
   }
+
+  // Should not reach here, but just in case
+  return json(503, { 
+    error: 'All AI servers are busy right now. Please wait a moment and try again.' 
+  });
 }
