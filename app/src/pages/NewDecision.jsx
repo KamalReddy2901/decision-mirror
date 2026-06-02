@@ -1,0 +1,886 @@
+
+import { useState, useEffect, useRef } from 'react';
+import {
+    isAIAvailable,
+    generateNextQuestion,
+    generateAnalysis,
+    getRateLimitCooldownRemainingMs
+} from '../engine/aiService';
+import { saveDecision, getUserValues } from '../engine/storage';
+import { runFullAnalysis } from '../engine/decisionEngine';
+import AnimatedBackground from '../components/AnimatedBackground';
+
+const MAX_QUESTIONS = 5;
+
+const EMOTION_LABELS = [
+    { min: 0, max: 15, label: 'Detached', emoji: '🧊', desc: 'Very analytical, almost disconnected' },
+    { min: 16, max: 35, label: 'Calm', emoji: '🌊', desc: 'Clear-headed, good headspace for decisions' },
+    { min: 36, max: 55, label: 'Engaged', emoji: '⚖️', desc: 'Balanced — emotions informing, not controlling' },
+    { min: 56, max: 75, label: 'Stirred', emoji: '🌡️', desc: 'Emotions are active — proceed thoughtfully' },
+    { min: 76, max: 100, label: 'Heated', emoji: '🔥', desc: 'Strong emotions in play — consider waiting' },
+];
+
+function getEmotionLabel(score) {
+    return EMOTION_LABELS.find(l => score >= l.min && score <= l.max) || EMOTION_LABELS[2];
+}
+
+function isRateLimitError(message = '') {
+    return /(rate limit|cooldown|429)/i.test(String(message));
+}
+
+function mapConfidence(confidence = 'moderate') {
+    if (confidence === 'strong') return 'high';
+    if (confidence === 'weak') return 'low';
+    return 'medium';
+}
+
+function buildLocalFallbackAIAnalysis({ description, options, localEngine, emotionalScore }) {
+    const topCondition = localEngine?.recommendation?.conditions?.[0] || null;
+    const topScenario = localEngine?.scenarios?.[0] || null;
+    const topTen = localEngine?.tenTenTen?.[0] || null;
+    const topTradeOff = localEngine?.recommendation?.tradeOffs?.[0] || 'Both paths have trade-offs — use your priorities to decide.';
+
+    return {
+        verdict: {
+            title: topCondition?.recommendation || 'Use a deliberate pause before deciding',
+            recommendation: `AI is temporarily rate-limited, so this report uses MirrorWise's local decision engine. Current best-fit direction: ${topCondition?.recommendation || options[0]}.`,
+            confidence: mapConfidence(topCondition?.confidence),
+            reversibility: 'Revisit after a short pause when new information arrives'
+        },
+        emotionalInsight: {
+            feeling: localEngine?.emotionalAnalysis?.label || 'Emotionally engaged',
+            explanation: localEngine?.emotionalAnalysis?.advice || 'Your emotional state meaningfully affects this decision.',
+            hiddenDesire: 'You likely want both safety now and a path that still preserves long-term growth.'
+        },
+        coreConflict: {
+            sideA: options[0] || 'Act now',
+            sideB: options[1] || 'Wait and gather data',
+            explanation: `Your dilemma balances immediate pressure against longer-term stability in: "${description.slice(0, 140)}${description.length > 140 ? '...' : ''}"`
+        },
+        cognitiveDistortions: (localEngine?.biases || []).slice(0, 4).map((bias) => ({
+            bias: bias.name || 'Cognitive bias',
+            evidence: bias.description || 'Detected from decision language patterns.',
+            impact: 'This can skew your weighting of risk and reward.',
+            antidote: bias.reframe || 'List evidence for and against your current assumption.',
+            research: bias.research || 'Behavioral decision science'
+        })),
+        tenTenTen: topTen
+            ? {
+                tenMinutes: topTen.tenMinutes,
+                tenMonths: topTen.tenMonths,
+                tenYears: topTen.tenYears
+            }
+            : null,
+        preMortem: (localEngine?.preMortem || []).slice(0, 3).map((item) => ({
+            failure: item.failure,
+            probability: 'medium',
+            earlyWarning: item.redFlag,
+            prevention: item.prevention
+        })),
+        scenarios: topScenario
+            ? {
+                best: topScenario.best?.scenario,
+                likely: topScenario.mostLikely?.scenario,
+                worst: topScenario.worst?.scenario
+            }
+            : null,
+        assumptions: (localEngine?.assumptions || []).slice(0, 5).map(a => a.text),
+        pathForward: [
+            {
+                step: 1,
+                action: `Prioritize this path unless new evidence appears: ${topCondition?.recommendation || options[0]}`,
+                why: 'It aligns best with your current impact and values pattern.',
+                timeframe: 'Today'
+            },
+            {
+                step: 2,
+                action: 'Test your top assumptions with one concrete verification step.',
+                why: 'Assumption checks reduce avoidable regret.',
+                timeframe: 'Next 24-48 hours'
+            }
+        ],
+        blindSpots: [
+            {
+                title: 'Trade-off visibility',
+                insight: topTradeOff
+            }
+        ],
+        scores: {
+            emotionRisk: emotionalScore,
+            biasRisk: Math.min(95, (localEngine?.biases?.length || 0) * 18 + 18),
+            complexityScore: localEngine?.stakes?.level === 'high' ? 75 : localEngine?.stakes?.level === 'medium' ? 55 : 35,
+            confidenceScore: topCondition?.confidence === 'strong' ? 80 : topCondition?.confidence === 'weak' ? 40 : 60,
+            clarityScore: 58,
+            urgencyScore: localEngine?.stakes?.level === 'high' ? 72 : 50
+        },
+        risks: (localEngine?.preMortem || []).slice(0, 3).map((item) => ({
+            risk: item.failure,
+            likelihood: 'medium',
+            probability: 55,
+            mitigation: item.prevention
+        })),
+        communityInsights: [],
+        reflectionQuestion: 'Which option would still feel correct in 6 months if nobody else approved of it?',
+        devilsAdvocate: topTradeOff,
+        localOnlyReason: 'AI temporarily rate-limited — generated using local decision engine.'
+    };
+}
+
+function normalizeOption(option) {
+    return String(option || '')
+        .replace(/^[\s\-:•*]+/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function inferDecisionOptions(description, aiAnalysis) {
+    const candidateOptions = [
+        ...(Array.isArray(aiAnalysis?.options) ? aiAnalysis.options : []),
+        aiAnalysis?.coreConflict?.sideA,
+        aiAnalysis?.coreConflict?.sideB,
+    ]
+        .map(normalizeOption)
+        .filter(Boolean);
+
+    const uniqueOptions = [];
+    const seen = new Set();
+
+    candidateOptions.forEach(option => {
+        const key = option.toLowerCase();
+        if (option.length >= 4 && !seen.has(key)) {
+            seen.add(key);
+            uniqueOptions.push(option);
+        }
+    });
+
+    if (uniqueOptions.length >= 2) {
+        return uniqueOptions.slice(0, 4);
+    }
+
+    return [
+        `Move forward with: ${aiAnalysis?.verdict?.title || 'the recommended direction'}`,
+        'Pause and collect more evidence before committing'
+    ];
+}
+
+export default function NewDecision({ onNavigate }) {
+    // describe → checkin → discuss → analyzing
+    const [phase, setPhase] = useState('describe');
+    const [description, setDescription] = useState('');
+
+    // Emotional Check-In
+    const [emotionalScore, setEmotionalScore] = useState(50);
+
+    // Conversation
+    const [chatHistory, setChatHistory] = useState([]);
+    const [currentQuestion, setCurrentQuestion] = useState(null);
+    const [currentAnswer, setCurrentAnswer] = useState('');
+    const [isThinking, setIsThinking] = useState(false);
+
+    // Analysis progress
+    const [analyzeProgress, setAnalyzeProgress] = useState(0);
+    const [analyzeStage, setAnalyzeStage] = useState('');
+    const [error, setError] = useState(null);
+    const [cooldownRemainingMs, setCooldownRemainingMs] = useState(0);
+
+    // Reactive API key check — polls so it updates when user saves key in Settings
+    const [apiReady, setApiReady] = useState(() => isAIAvailable());
+
+    const textareaRef = useRef(null);
+    const answerRef = useRef(null);
+    const chatEndRef = useRef(null);
+
+    useEffect(() => {
+        const check = () => setApiReady(isAIAvailable());
+        const interval = setInterval(check, 1000);
+        window.addEventListener('focus', check);
+        return () => { clearInterval(interval); window.removeEventListener('focus', check); };
+    }, []);
+
+    useEffect(() => {
+        const syncCooldown = () => setCooldownRemainingMs(getRateLimitCooldownRemainingMs());
+        syncCooldown();
+        const interval = setInterval(syncCooldown, 1000);
+        window.addEventListener('focus', syncCooldown);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('focus', syncCooldown);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (phase === 'describe' && textareaRef.current) {
+            textareaRef.current.focus();
+        }
+    }, [phase]);
+
+    useEffect(() => {
+        if (answerRef.current) answerRef.current.focus();
+    }, [currentQuestion]);
+
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [chatHistory, currentQuestion]);
+
+    // ============================================
+    // PHASE 1: Describe → go to Emotional Check-In
+    // ============================================
+    const handleDescribeNext = () => {
+        if (!description.trim()) return;
+        setPhase('checkin');
+    };
+
+    // ============================================
+    // PHASE 2: Emotional Check-In → start AI conversation
+    // ============================================
+    const handleCheckinComplete = async () => {
+        if (!isAIAvailable()) return;
+
+        setIsThinking(true);
+        setError(null);
+
+        try {
+            const firstQuestion = await generateNextQuestion(description, [], emotionalScore);
+            if (firstQuestion) {
+                setCurrentQuestion(firstQuestion);
+                setPhase('discuss');
+            } else {
+                // AI didn't ask a question — use a smart fallback
+                const fallback = emotionalScore > 60
+                    ? "What's the worst-case scenario you're imagining — and how likely is it really?"
+                    : "If you had to decide right now with no more information, which way would you lean — and what does that gut reaction tell you?";
+                setCurrentQuestion(fallback);
+                setPhase('discuss');
+            }
+        } catch (e) {
+            setError(e.message);
+            // Still move to discuss with a fallback question
+            setCurrentQuestion("What matters most to you about this decision — and what are you most afraid of losing?");
+            setPhase('discuss');
+        }
+        setIsThinking(false);
+    };
+
+    // ============================================
+    // PHASE 3: Submit answer and get next question
+    // ============================================
+    const handleSubmitAnswer = async () => {
+        if (!currentAnswer.trim() || isThinking) return;
+
+        const newHistory = [...chatHistory, { question: currentQuestion, answer: currentAnswer }];
+        setChatHistory(newHistory);
+        setCurrentAnswer('');
+        setIsThinking(true);
+        setError(null);
+
+        try {
+            const nextQuestion = await generateNextQuestion(description, newHistory, emotionalScore);
+
+            if (nextQuestion) {
+                setCurrentQuestion(nextQuestion);
+                setIsThinking(false);
+            } else {
+                setIsThinking(false);
+                await performAnalysis(newHistory);
+            }
+        } catch (e) {
+            setError(e.message);
+            setIsThinking(false);
+        }
+    };
+
+    // ============================================
+    // PHASE 4: Generate full analysis
+    // ============================================
+    const performAnalysis = async (history) => {
+        setPhase('analyzing');
+        setAnalyzeProgress(0);
+        setError(null);
+
+        const stages = [
+            { text: 'Reading your emotional landscape...', progress: 8 },
+            { text: 'Scanning for cognitive biases...', progress: 18 },
+            { text: 'Running decision science frameworks...', progress: 28 },
+            { text: 'Building future scenarios...', progress: 38 },
+            { text: 'Comparing your options side-by-side...', progress: 48 },
+            { text: 'Stress-testing assumptions...', progress: 55 },
+            { text: 'Generating your personal analysis...', progress: 62 },
+            { text: 'Cross-referencing research data...', progress: 68 },
+            { text: 'Polishing insights...', progress: 74 },
+            { text: 'Almost there — finalizing report...', progress: 80 },
+            { text: 'Still working — complex analysis takes a moment...', progress: 84 },
+            { text: 'Wrapping up the last details...', progress: 88 },
+        ];
+
+        let stageIndex = 0;
+        const stageInterval = setInterval(() => {
+            if (stageIndex < stages.length) {
+                setAnalyzeStage(stages[stageIndex].text);
+                setAnalyzeProgress(stages[stageIndex].progress);
+                stageIndex++;
+            }
+        }, 1500);
+
+        try {
+            const aiAnalysis = await generateAnalysis(description, history, emotionalScore);
+            const answers = history.map(item => item.answer);
+            const options = inferDecisionOptions(description, aiAnalysis);
+
+            const localEngine = runFullAnalysis(
+                description,
+                options,
+                answers,
+                getUserValues(),
+                emotionalScore
+            );
+
+            // Merge: AI-generated content takes priority, local engine is fallback
+            const analysis = {
+                ...aiAnalysis,
+                options,
+                emotionalScore,
+                conversationHistory: history,
+                localEngine,
+                // Local engine provides structure/classification
+                category: localEngine.category,
+                stakes: localEngine.stakes,
+                impactScores: localEngine.impactScores,
+                opportunityCosts: localEngine.opportunityCosts,
+                valuesAlignment: localEngine.valuesAlignment,
+                emotionalAnalysis: localEngine.emotionalAnalysis,
+                // AI-generated content preferred, local engine as fallback
+                tenTenTen: aiAnalysis.tenTenTen || localEngine.tenTenTen,
+                preMortem: aiAnalysis.preMortem || localEngine.preMortem,
+                scenarios: aiAnalysis.scenarios || localEngine.scenarios,
+                assumptions: aiAnalysis.assumptions || localEngine.assumptions,
+                biases: aiAnalysis.cognitiveDistortions?.length > 0
+                    ? localEngine.biases  // keep both — AnalysisView merges them
+                    : localEngine.biases,
+                recommendation: localEngine.recommendation,
+                generatedAt: Date.now(),
+                mode: 'hybrid-analysis'
+            };
+
+            clearInterval(stageInterval);
+            setAnalyzeProgress(100);
+            setAnalyzeStage('Your analysis is ready.');
+
+            const verdictTitle = analysis?.verdict?.title || 'Decision Analysis';
+            saveDecision({
+                title: verdictTitle,
+                description: description,
+                options,
+                answers: history,
+                emotionalScore,
+                analysis: analysis,
+            });
+
+            setTimeout(() => {
+                onNavigate('analysis', {
+                    analysis: analysis,
+                    title: verdictTitle,
+                    description: description
+                });
+            }, 800);
+
+        } catch (err) {
+            if (isRateLimitError(err?.message)) {
+                const answers = history.map(item => item.answer);
+                const options = inferDecisionOptions(description, null);
+                const localEngine = runFullAnalysis(
+                    description,
+                    options,
+                    answers,
+                    getUserValues(),
+                    emotionalScore
+                );
+
+                const aiFallback = buildLocalFallbackAIAnalysis({
+                    description,
+                    options,
+                    localEngine,
+                    emotionalScore
+                });
+
+                const analysis = {
+                    ...aiFallback,
+                    options,
+                    emotionalScore,
+                    conversationHistory: history,
+                    localEngine,
+                    category: localEngine.category,
+                    stakes: localEngine.stakes,
+                    impactScores: localEngine.impactScores,
+                    opportunityCosts: localEngine.opportunityCosts,
+                    valuesAlignment: localEngine.valuesAlignment,
+                    emotionalAnalysis: localEngine.emotionalAnalysis,
+                    tenTenTen: aiFallback.tenTenTen || localEngine.tenTenTen,
+                    preMortem: aiFallback.preMortem || localEngine.preMortem,
+                    scenarios: aiFallback.scenarios || localEngine.scenarios,
+                    assumptions: aiFallback.assumptions || localEngine.assumptions,
+                    biases: localEngine.biases,
+                    recommendation: localEngine.recommendation,
+                    generatedAt: Date.now(),
+                    mode: 'local-fallback'
+                };
+
+                clearInterval(stageInterval);
+                setAnalyzeProgress(100);
+                setAnalyzeStage('AI is busy right now — your local analysis is ready.');
+
+                const verdictTitle = analysis?.verdict?.title || 'Decision Analysis';
+                saveDecision({
+                    title: verdictTitle,
+                    description: description,
+                    options,
+                    answers: history,
+                    emotionalScore,
+                    analysis: analysis,
+                });
+
+                setTimeout(() => {
+                    onNavigate('analysis', {
+                        analysis: analysis,
+                        title: verdictTitle,
+                        description: description
+                    });
+                }, 500);
+                return;
+            }
+
+            clearInterval(stageInterval);
+            console.error('Analysis failed:', err);
+            setError(err.message || 'Analysis failed. Please try again.');
+            setAnalyzeProgress(0);
+            setAnalyzeStage('');
+        }
+    };
+
+    const handleSkipToAnalysis = () => {
+        performAnalysis(chatHistory);
+    };
+
+    const currentEmotionLabel = getEmotionLabel(emotionalScore);
+    const retryCooldownSeconds = Math.max(0, Math.ceil(cooldownRemainingMs / 1000));
+    const isRetryCooldownActive = retryCooldownSeconds > 0;
+
+    // ============================================
+    // STEP INDICATOR
+    // ============================================
+    const steps = [
+        { key: 'describe', label: 'Describe' },
+        { key: 'checkin', label: 'Check In' },
+        { key: 'discuss', label: 'Explore' },
+        { key: 'analyzing', label: 'Analyze' },
+    ];
+    const currentStepIndex = steps.findIndex(s => s.key === phase);
+
+    const renderStepIndicator = () => (
+        <div className="flow-progress" style={{ animation: 'fadeInUp 0.5s var(--ease-out)' }}>
+            {steps.map((step, i) => (
+                <div key={step.key} className="flow-step">
+                    <div className={`step-dot ${i === currentStepIndex ? 'active' : ''} ${i < currentStepIndex ? 'completed' : ''}`}>
+                        {i < currentStepIndex ? '✓' : i + 1}
+                    </div>
+                    {i < steps.length - 1 && (
+                        <div className={`step-connector ${i < currentStepIndex ? 'completed' : ''}`} />
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+
+    // ============================================
+    // RENDER: Describe Phase
+    // ============================================
+    const renderDescribe = () => (
+        <div className="decision-flow">
+            {renderStepIndicator()}
+            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-out)' }}>
+                <div className="describe-header">
+                    <div className="describe-icon">🪞</div>
+                    <h2>What's weighing on your mind?</h2>
+                    <p className="subtitle">
+                        Describe your situation naturally. The more honest and detailed you are,
+                        the more useful your analysis will be.
+                    </p>
+                </div>
+
+                <div className="input-group">
+                    <textarea
+                        ref={textareaRef}
+                        className="text-area text-area-large"
+                        placeholder="e.g., I've been offered a job in another city but my partner doesn't want to move. The pay is significantly better and it's in the field I've always wanted to work in, but I'm scared of what it might do to our relationship..."
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        maxLength={3000}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.metaKey) handleDescribeNext();
+                        }}
+                    />
+                    <div className="char-counter" style={{ marginTop: '0.5rem' }}>
+                        {description.length > 0 && `${description.length} / 3,000`}
+                    </div>
+                </div>
+
+                {!apiReady && (
+                    <div className="setup-prompt glass-card" style={{
+                        marginTop: '1.5rem',
+                        background: 'rgba(251, 191, 36, 0.08)',
+                        border: '1px solid rgba(251, 191, 36, 0.2)',
+                        padding: '1.25rem'
+                    }}>
+                        <p style={{ color: '#fbbf24', fontSize: '0.95rem', marginBottom: '0.75rem' }}>
+                            🔑 Add your free Groq API key to get started
+                        </p>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+                            MirrorWise uses <strong>Groq + Llama 3</strong> for lightning-fast, psychology-grounded analysis.
+                            Get a free key in 10 seconds.
+                        </p>
+                        <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => document.querySelector('.nav-link[title="Settings"]')?.click()}
+                        >
+                            Open Settings
+                        </button>
+                    </div>
+                )}
+
+                <div className="question-actions">
+                    {apiReady ? (
+                        <button
+                            className="btn btn-primary btn-lg"
+                            onClick={handleDescribeNext}
+                            disabled={!description.trim() || description.trim().length < 20}
+                        >
+                            Continue →
+                        </button>
+                    ) : (
+                        <button
+                            className="btn btn-primary btn-lg"
+                            style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                            disabled
+                        >
+                            Add API Key Above to Continue
+                        </button>
+                    )}
+                </div>
+                {description.trim().length > 0 && description.trim().length < 20 && apiReady && (
+                    <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                        Add a bit more detail for a meaningful analysis
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+
+    // ============================================
+    // RENDER: Emotional Check-In Phase (NEW!)
+    // ============================================
+    const renderCheckin = () => (
+        <div className="decision-flow">
+            {renderStepIndicator()}
+            <div className="glass-card decision-input-container" style={{ animation: 'fadeInUp 0.6s var(--ease-out)' }}>
+                <div className="describe-header">
+                    <div className="describe-icon" style={{ fontSize: '2.5rem' }}>{currentEmotionLabel.emoji}</div>
+                    <h2>Before we analyze — how are you feeling?</h2>
+                    <p className="subtitle">
+                        Research shows that simply naming your emotional state reduces its influence
+                        on your decision by up to 50%.
+                        <span style={{ display: 'block', marginTop: '0.5rem', color: 'var(--text-tertiary)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                            — Lieberman et al. (2007), "Putting Feelings into Words"
+                        </span>
+                    </p>
+                </div>
+
+                <div className="emotional-gauge">
+                    <div className="gauge-track">
+                        <div
+                            className="gauge-thumb"
+                            style={{ left: `${emotionalScore}%` }}
+                        />
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={emotionalScore}
+                            onChange={(e) => setEmotionalScore(parseInt(e.target.value, 10))}
+                            style={{
+                                position: 'absolute',
+                                inset: 0,
+                                width: '100%',
+                                height: '100%',
+                                opacity: 0,
+                                cursor: 'pointer',
+                                zIndex: 2
+                            }}
+                        />
+                    </div>
+                    <div className="gauge-labels">
+                        <span>Calm & Clear</span>
+                        <span>Emotionally Charged</span>
+                    </div>
+                </div>
+
+                <div className="glass-card" style={{
+                    textAlign: 'center',
+                    padding: '1.5rem',
+                    margin: '1.5rem 0',
+                    background: `${emotionalScore > 70 ? 'rgba(244, 63, 94, 0.08)' : emotionalScore > 40 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(52, 211, 153, 0.08)'}`,
+                    border: `1px solid ${emotionalScore > 70 ? 'rgba(244, 63, 94, 0.2)' : emotionalScore > 40 ? 'rgba(99, 102, 241, 0.2)' : 'rgba(52, 211, 153, 0.2)'}`,
+                }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{currentEmotionLabel.emoji}</div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '0.25rem' }}>
+                        {currentEmotionLabel.label}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                        {currentEmotionLabel.desc}
+                    </div>
+                </div>
+
+                {emotionalScore > 75 && (
+                    <div className="glass-card" style={{
+                        padding: '1rem 1.25rem',
+                        background: 'rgba(244, 63, 94, 0.06)',
+                        border: '1px solid rgba(244, 63, 94, 0.15)',
+                        fontSize: '0.875rem',
+                        color: 'var(--text-secondary)',
+                        lineHeight: 1.6
+                    }}>
+                        <strong style={{ color: '#f43f5e' }}>Gentle warning:</strong> Research by Loewenstein (2005) shows
+                        decisions made in "hot" emotional states are significantly more likely to be regretted.
+                        We'll factor this into your analysis — but consider revisiting your decision after 24 hours.
+                    </div>
+                )}
+
+                {isThinking && (
+                    <div className="glass-card" style={{
+                        textAlign: 'center', padding: '1.5rem', margin: '1rem 0',
+                        background: 'rgba(99, 102, 241, 0.06)',
+                        border: '1px solid rgba(99, 102, 241, 0.15)',
+                        animation: 'fadeInUp 0.4s var(--ease-out)'
+                    }}>
+                        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🪞</div>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                            Preparing your first exploration question...
+                        </p>
+                    </div>
+                )}
+
+                <div className="question-actions" style={{ marginTop: '2rem' }}>
+                    <button className="btn btn-ghost" onClick={() => setPhase('describe')} disabled={isThinking}>
+                        ← Back
+                    </button>
+                    {apiReady ? (
+                        <button className="btn btn-primary btn-lg" onClick={handleCheckinComplete} disabled={isThinking}>
+                            {isThinking ? 'Preparing...' : 'Begin Exploration →'}
+                        </button>
+                    ) : (
+                        <button className="btn btn-primary btn-lg" onClick={() => document.querySelector('.nav-link[title="Settings"]')?.click()}>
+                            Add API Key to Continue
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+    // ============================================
+    // RENDER: Discuss Phase (Improved — not chatbot-like)
+    // ============================================
+    const renderDiscuss = () => {
+        const questionNum = chatHistory.length + (currentQuestion ? 1 : 0);
+        return (
+            <div className="decision-flow discuss-flow">
+                {renderStepIndicator()}
+
+                {/* Context + emotional state reminder */}
+                <div className="context-reminder glass-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div className="context-label">Your situation</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
+                            {currentEmotionLabel.emoji} {currentEmotionLabel.label}
+                        </div>
+                    </div>
+                    <p>{description.length > 200 ? description.slice(0, 200) + '...' : description}</p>
+                </div>
+
+                {/* Question progress */}
+                <div style={{
+                    textAlign: 'center',
+                    padding: '0.75rem 0',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-tertiary)',
+                    fontFamily: 'var(--font-mono)'
+                }}>
+                    Exploration {questionNum}
+                </div>
+
+                {error && (
+                    <div className="glass-card" style={{
+                        padding: '1rem', background: 'rgba(244, 63, 94, 0.08)',
+                        border: '1px solid rgba(244, 63, 94, 0.2)', marginBottom: '1rem',
+                        fontSize: '0.9rem', color: '#f43f5e'
+                    }}>
+                        <p style={{ marginBottom: '0.75rem' }}>{error}</p>
+                        {isRetryCooldownActive && (
+                            <p style={{ marginBottom: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                                Cooling down to avoid repeated rate-limit failures. Retry unlocks in {retryCooldownSeconds}s.
+                            </p>
+                        )}
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                                className="btn btn-primary btn-sm"
+                                onClick={() => { setError(null); handleSkipToAnalysis(); }}
+                                disabled={isRetryCooldownActive}
+                            >
+                                {isRetryCooldownActive ? `Retry in ${retryCooldownSeconds}s` : 'Retry Analysis'}
+                            </button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setError(null)}>
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Conversation history */}
+                <div className="conversation-thread">
+                    {chatHistory.map((msg, i) => (
+                        <div key={i} className="exchange-pair" style={{ animationDelay: '0s' }}>
+                            <div className="msg msg-ai">
+                                <div className="msg-avatar">🪞</div>
+                                <div className="msg-content">{msg.question}</div>
+                            </div>
+                            <div className="msg msg-user">
+                                <div className="msg-content">{msg.answer}</div>
+                            </div>
+                        </div>
+                    ))}
+
+                    {currentQuestion && !isThinking && (
+                        <div className="exchange-pair current-exchange" style={{ animation: 'fadeInUp 0.5s var(--ease-out)' }}>
+                            <div className="msg msg-ai">
+                                <div className="msg-avatar">🪞</div>
+                                <div className="msg-content">{currentQuestion}</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {isThinking && (
+                        <div className="msg msg-ai thinking" style={{ animation: 'fadeInUp 0.3s var(--ease-out)' }}>
+                            <div className="msg-avatar">🪞</div>
+                            <div className="msg-content">
+                                <span className="thinking-dots">
+                                    <span>.</span><span>.</span><span>.</span>
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div ref={chatEndRef} />
+                </div>
+
+                {/* Answer input */}
+                {currentQuestion && !isThinking && (
+                    <div className="answer-area glass-card" style={{ animation: 'fadeInUp 0.5s var(--ease-out) 0.2s backwards' }}>
+                        <textarea
+                            ref={answerRef}
+                            className="text-area"
+                            value={currentAnswer}
+                            onChange={(e) => setCurrentAnswer(e.target.value)}
+                            placeholder="Be honest — the more real you are, the better the analysis..."
+                            rows={3}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSubmitAnswer();
+                                }
+                            }}
+                        />
+                        <div className="answer-actions">
+                            <button
+                                className="btn btn-ghost btn-sm"
+                                onClick={handleSkipToAnalysis}
+                            >
+                                Skip to analysis →
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSubmitAnswer}
+                                disabled={!currentAnswer.trim() || isThinking}
+                            >
+                                Reply ↵
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ============================================
+    // RENDER: Analyzing Phase
+    // ============================================
+    const renderAnalyzing = () => (
+        <div className="analyzing-state">
+            {renderStepIndicator()}
+            {error ? (
+                <div style={{ maxWidth: '500px', margin: '2rem auto', textAlign: 'center' }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⚠️</div>
+                    <div className="glass-card" style={{
+                        padding: '1.5rem', background: 'rgba(244, 63, 94, 0.08)',
+                        border: '1px solid rgba(244, 63, 94, 0.2)',
+                    }}>
+                        <p style={{ color: '#f43f5e', fontSize: '0.95rem', marginBottom: '1rem' }}>{error}</p>
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                            <button
+                                className="btn btn-primary"
+                                onClick={() => { setError(null); performAnalysis(chatHistory); }}
+                                disabled={isRetryCooldownActive}
+                            >
+                                {isRetryCooldownActive ? `🔄 Retry in ${retryCooldownSeconds}s` : '🔄 Retry Analysis'}
+                            </button>
+                            <button className="btn btn-ghost" onClick={() => { setError(null); setPhase('discuss'); }}>
+                                ← Back to Exploration
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <div className="analyzing-visual">
+                        <div className="analyzing-rings">
+                            <div className="ring ring-1" />
+                            <div className="ring ring-2" />
+                            <div className="ring ring-3" />
+                            <div className="ring-center">🪞</div>
+                        </div>
+                    </div>
+                    <h2 className="analyzing-title">Building Your MirrorWise</h2>
+                    <p className="analyzing-stage">{analyzeStage}</p>
+                    <div className="progress-track">
+                        <div
+                            className="progress-fill"
+                            style={{ width: `${analyzeProgress}%` }}
+                        />
+                    </div>
+                    <p className="analyzing-hint">
+                        Running {emotionalScore > 60 ? '7' : '6'} psychology frameworks against your situation...
+                    </p>
+                </>
+            )}
+        </div>
+    );
+
+    return (
+        <>
+            <AnimatedBackground emotionalScore={phase === 'analyzing' ? 70 : phase === 'checkin' ? emotionalScore : 50} />
+            {phase === 'describe' && renderDescribe()}
+            {phase === 'checkin' && renderCheckin()}
+            {phase === 'discuss' && renderDiscuss()}
+            {phase === 'analyzing' && renderAnalyzing()}
+        </>
+    );
+}
