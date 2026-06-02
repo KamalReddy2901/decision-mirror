@@ -324,19 +324,23 @@ function extractJSON(text) {
     try {
         // Try direct parse first
         return JSON.parse(text);
-    } catch {
+    } catch (firstError) {
+        console.warn('Direct JSON parse failed, attempting extraction...', firstError.message);
+        
         // Find JSON block
         const start = text.indexOf('{');
         const end = text.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
+        if (start !== -1 && end !== -1 && end > start) {
             const jsonStr = text.substring(start, end + 1);
             try {
                 return JSON.parse(jsonStr);
-            } catch {
-                console.error("Failed to parse extracted JSON:", jsonStr);
-                throw new Error("Invalid JSON response from AI");
+            } catch (secondError) {
+                console.error("Failed to parse extracted JSON:", jsonStr.substring(0, 200) + '...');
+                console.error("Parse error:", secondError.message);
+                throw new Error(`Invalid JSON response from AI: ${secondError.message}`);
             }
         }
+        console.error("No valid JSON found in response:", text.substring(0, 200) + '...');
         throw new Error("No JSON found in AI response");
     }
 }
@@ -616,7 +620,12 @@ CRITICAL RULES:
             };
         } catch (error) {
             lastError = error;
-            console.warn(`Analysis attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error.status || error.message);
+            console.error(`Analysis attempt ${attempt + 1}/${MAX_RETRIES} failed:`, error);
+            console.error('Error details:', {
+                status: error.status,
+                message: error.message,
+                stack: error.stack?.substring(0, 200)
+            });
 
             // Don't retry on auth errors — those won't fix themselves
             if (error.status === 401) {
@@ -639,10 +648,16 @@ CRITICAL RULES:
 
     // All retries exhausted
     console.error("ANALYSIS ERROR (all retries failed):", lastError);
+    console.error("Last error type:", lastError?.constructor?.name);
+    console.error("Last error message:", lastError?.message);
+    
     if (lastError?.status === 429) {
         throw new Error("Groq rate limit reached. Please wait 30 seconds and try again (free tier has usage limits).");
     }
-    throw new Error("Analysis failed after multiple attempts. Please try again in a moment.");
+    
+    // More specific error message
+    const errorMsg = lastError?.message || 'Unknown error';
+    throw new Error(`Analysis failed after multiple attempts: ${errorMsg}. Please try again in a moment.`);
 }
 
 // ============================================
